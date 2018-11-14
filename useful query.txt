@@ -1,0 +1,70 @@
+Iport database with command prompt:
+ mysql -u root -p
+ use bd_name
+ source db_name.sql;
+
+import table:
+ mysql -u root -p -D bdlaws < sections.sql
+
+insertion of data form one table to another:
+INSERT INTO table_namemig(
+    `id`,
+    `actId`,
+    `partId`,
+    `chapterId`,
+    `sectionNo`,
+    `sectionName`,
+    `field_name`,
+    `sectionHead`,
+    `sectionTable`,
+    `CreatedBy`,
+    `CreatedAt`,
+    `UpdatedBy`,
+    `UpdatedAt`
+
+)
+SELECT
+     
+  `id`,
+  `act_id`,
+  `part_id`,
+  `chapter_id`,
+  `sections_no` ,
+  `sections_name` ,
+  `section_description`,
+  `sections_head`,
+  `sec_table` ,
+  `CreatedBy` ,
+  `CreatedAt` ,
+  `UpdatedBy`,
+  `UpdatedAt`
+FROM
+    sections
+ORDER BY
+   `id` ASC
+
+Updata values form another table:
+
+UPDATE table_namemig
+INNER JOIN table_name ON (table_namemig.field_name = table_name.field_name)
+SET table_namemig.volume = table_name.volume
+
+UPDATE table SET field = REPLACE(field, '\n', '<br/>')
+
+
+
+1. UPDATE table_name
+INNER JOIN sections ON (table_name.id = sections.id)
+SET table_name.field_name = sections.section_description
+2.UPDATE table_name SET field_name = REPLACE(field_name, '\r\n\r\n', '<div class="clbr">&nbsp;</div>')
+3.UPDATE table_name SET field_name = REPLACE(field_name, '\r\n', '<div class="na">&nbsp;</div>')
+4.UPDATE table_name SET field_name = REPLACE(field_name, '<br/>', '<div class="clbr">&nbsp;</div>')
+5.UPDATE table_name SET field_name = REPLACE(field_name, '<br />', '<div class="clbr">&nbsp;</div>')
+6.
+UPDATE table_name set field_name=concat('imran',field_name) WHERE field_name REGEXP '^(<div class="clbr">&nbsp;</div><div class="na">&nbsp;</div>)' 
+7.
+UPDATE table_name set field_name=REPLACE(field_name,'imran<div class="clbr">&nbsp;</div><div class="na">&nbsp;</div>','') WHERE field_name REGEXP '^(imran<div class="clbr">&nbsp;</div><div class="na">&nbsp;</div>)' 
+8.
+UPDATE table_name set field_name=concat('imran',field_name) WHERE field_name REGEXP '^(<div class="clbr">&nbsp;</div><div class="na">&nbsp;</div>)' 
+9.
+UPDATE table_name set field_name=REPLACE(field_name,'imran<div class="clbr">&nbsp;</div><div class="na">&nbsp;</div>','') WHERE field_name REGEXP '^(imran<div class="clbr">&nbsp;</div><div class="na">&nbsp;</div>)' 

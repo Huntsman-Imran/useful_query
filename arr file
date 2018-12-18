@@ -1,0 +1,2 @@
+AAR File Creation:
+        jar cvf cplex.aar request response META-INF/services.xml cplex.class config.properties

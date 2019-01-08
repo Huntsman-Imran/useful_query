@@ -1,0 +1,879 @@
+--------------------------------------------------------
+--  File created - Tuesday-January-08-2019   
+--------------------------------------------------------
+--------------------------------------------------------
+--  DDL for Procedure ADDONLINESALESMASTER
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."ADDONLINESALESMASTER" (i_onlinetransid IN NUMBER,i_onlinetrasdate IN VARCHAR,i_onlineticketqty IN NUMBER,i_onlineamttendered IN NUMBER,i_insertedby IN VARCHAR,i_showdate IN VARCHAR,i_programid IN NUMBER,i_mobileno IN VARCHAR, row OUT NUMBER)
+AS
+BEGIN  
+  insert into onlinesalemaster@ticketlink(onlinetransid,onlinetrasdate,onlineticketqty,onlineamttendered,status,insertedby,inserteddate,programid,showdate,mobileno)
+                    values(i_onlinetransid,to_date(i_onlinetrasdate, 'yyyy-mm-dd'),i_onlineticketqty,i_onlineamttendered,'0',i_insertedby,to_date(i_onlinetrasdate, 'yyyy-mm-dd'),i_programid,to_date(i_showdate, 'yyyy-mm-dd'),i_mobileno);
+   IF SQL%NOTFOUND THEN
+         row:=0;
+      ELSE
+        row:=1;
+      END IF;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure ADDONLINETICKETTRANSACTION
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."ADDONLINETICKETTRANSACTION" (
+i_ticketNumber IN VARCHAR,
+i_programId IN VARCHAR,
+i_status IN VARCHAR,
+i_ticketSeqId IN VARCHAR,
+i_saleDate IN VARCHAR,
+i_autoCardNum IN VARCHAR,
+i_insertedBy IN VARCHAR,
+i_insertedDate IN VARCHAR,
+i_ticketUnitPrice IN NUMBER,
+i_onlinetransid IN NUMBER,
+row OUT NUMBER)
+AS
+BEGIN  
+ --insert into ticketbook(TICKETNUMBER,PROGRAMID,STATUS,TICKETSEQID,INSERTEDBY,INSERTEDDATE,UPDATEDBY,UPDATEDDATE) values   (i_ticketNumber,i_programId,i_status,i_ticketSeqId,i_insertedBy,i_insertedDate,i_insertedBy,i_insertedDate);
+
+  insert into TICKETSALEBYSCARD@ticketlink(CARDNUM,SALEDATE,TICKQTY,TICKETNUMBER,TICKPRICE,CARDPRICE,INSERTEDBY,INSERTEDDATE,UPDATEDBY,UPDATEDDATE)
+     values(i_autoCardNum,to_date(i_saleDate, 'yyyy-mm-dd'),1,i_ticketNumber,i_ticketUnitPrice,i_ticketUnitPrice,i_insertedBy,to_date(i_insertedDate, 'yyyy-mm-dd'),i_insertedBy,to_date(i_insertedDate, 'yyyy-mm-dd'));
+
+  insert into ONLINESALEDETAILS@ticketlink(onlinetransid,onlineticketid,onlinecost,status,insertedby,inserteddate) 
+            values(i_onlinetransid,i_ticketNumber,i_ticketUnitPrice,'0',i_insertedBy,to_date(i_insertedDate, 'yyyy-mm-dd'));
+
+  UPDATE ticketbook@ticketlink SET    Status='S' WHERE TICKETNUMBER=i_ticketNumber AND PROGRAMID=i_programId AND TICKETSEQID=i_ticketSeqId;    
+               
+   IF SQL%NOTFOUND THEN
+         row:=0;
+      ELSE
+        row:=1;
+      END IF;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure ADDSCARDPROFILE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."ADDSCARDPROFILE" (i_actcardno IN VARCHAR2,i_firstname IN VARCHAR2,i_middlename IN VARCHAR2,i_lastname IN VARCHAR2,i_email IN VARCHAR2,i_birthdate IN VARCHAR,i_gender IN VARCHAR2,i_insertdate IN VARCHAR,i_mobileno IN CHAR,i_status IN CHAR, row OUT NUMBER)
+AS
+BEGIN  
+  insert into scardprofile@ticketlink(actcardno,firstname,middlename,lastname,email,birthdate,gender,inserteddate,mobileno,status)
+                    values(i_actcardno,i_firstname,i_middlename,i_lastname,i_email,to_date(i_birthdate, 'yyyy-mm-dd'),i_gender,to_date(i_insertdate, 'yyyy-mm-dd'),i_mobileno,i_status);
+   IF SQL%NOTFOUND THEN
+         row:=0;
+      ELSE
+        row:=1;
+      END IF;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure CHANGEPASSWORDBYCARDNO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."CHANGEPASSWORDBYCARDNO" (thisCardNo IN VARCHAR, pass IN VARCHAR,thisUpdatedDate IN DATE,row OUT NUMBER) 
+  IS
+   BEGIN
+      UPDATE scardbox@ticketlink SET CardPass=pass,ispasschanged='Y',updatedby=thisCardNo,updateddate=thisUpdatedDate WHERE actcardno=thisCardNo;
+    
+      IF SQL%NOTFOUND THEN
+         row:=0;
+         
+      ELSE
+    row:=1;
+      END IF;
+   END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure CHECKSEATBYCTYPEANDPROGRAMID
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."CHECKSEATBYCTYPEANDPROGRAMID" (i_cardType IN INT, i_programId IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT  *
+            from ticketbook@ticketlink tb, seatplan@ticketlink sp
+            where sp.seatseqid = tb.ticketseqid
+            and sp.classheirarchey = i_cardType
+            AND sp.IsOnLine='Y' AND tb.Status='B'
+            and tb.ticketnumber not in (select ONLINETICKETID from ONLINESALEDETAILSLOG@ticketlink where is_booked='Y')
+            and tb.programid= i_programId order by SP.SEATSEQID;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure CHECKTICKBOOKBYPRGID
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."CHECKTICKBOOKBYPRGID" (i_programId IN INT,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT * from ticketbook@ticketlink where Status='S' AND programid= i_programId;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure CHECKUSERSBYCARDNO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."CHECKUSERSBYCARDNO" (CARDNO IN CHAR,outCARDNUM OUT VARCHAR,outPASSWORD OUT VARCHAR,outSCARDSTATUS OUT VARCHAR,outISBLOCKED OUT VARCHAR,outISONLINE OUT VARCHAR,outSALT OUT VARCHAR,outISPASSCHANGED OUT VARCHAR)
+AS
+BEGIN
+--SELECT CARDNUM,CARDPASS,SCARDSTATUS,ISBLOCKED,ISONLINE,SALT,ISPASSCHANGED INTO outCARDNUM,outPASSWORD,outSCARDSTATUS,outISBLOCKED,outISONLINE,outSALT,outISPASSCHANGED from SCARDBOX@ticketlink where actcardno=CARDNO and DURFROM <= SYSDATE and DURTO>= SYSDATE  and ISONLINE = 'Y';
+SELECT ACTCARDNO,CARDPASS,SCARDSTATUS,ISBLOCKED,ISONLINE,SALT,ISPASSCHANGED INTO outCARDNUM,outPASSWORD,outSCARDSTATUS,outISBLOCKED,outISONLINE,outSALT,outISPASSCHANGED from SCARDBOX@ticketlink where CARDNUM=CARDNO and DURFROM <= SYSDATE and DURTO>= SYSDATE  and ISONLINE = 'Y';
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  outISONLINE:=null;
+ END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure COUNTPURCHAGEDTICKET
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."COUNTPURCHAGEDTICKET" (
+       c_cardno IN varchar,
+       i_date IN varchar,
+       c_QTY OUT varchar)
+IS
+BEGIN
+ 
+  SELECT count(TICKQTY) as QTY 
+  INTO c_QTY 
+  FROM  TICKETSALEBYSCARD@ticketlink 
+  WHERE trim(CARDNUM) = trim(c_cardno)
+  AND showdate = to_date(i_date, 'yyyy-mm-dd');
+ 
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure COUNTTICKETALL
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."COUNTTICKETALL" (
+       c_cardno IN varchar,
+       i_date IN varchar,
+       c_QTY OUT varchar)
+IS
+BEGIN
+ 
+  SELECT SUM(ONLINETICKETQTY) as QTY 
+  INTO c_QTY 
+  FROM  ONLINESALEMASTER@ticketlink 
+  WHERE trim(INSERTEDBY) = trim(c_cardno)
+  AND SHOWDATE = to_date(i_date, 'yyyy-mm-dd');
+ 
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETALLSHOWTIMELISTBYMOVIE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETALLSHOWTIMELISTBYMOVIE" (i_movieId IN INT,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  
+    OPEN p_cursor FOR SELECT prg.showdate as showdate, to_char(st.showtime,'hh24:mi') as showtime,
+                                st.showtimeid as showtimeid, prg.programid as programid, prg.boxofficeid as boxofficeid
+                                from programedfilm@ticketlink prg,showtime@ticketlink st
+                                where prg.showtimeid = st.showtimeid
+                                and prg.boxofficeid = st.boxofficeid
+                                and prg.featureid = i_movieId
+                                and prg.IsOnline='Y' AND prg.Status='N'
+                                --and prg.showdate=to_date(i_date, 'yyyy-mm-dd');
+                                --and prg.showdate >= to_date(sysdate) and prg.showdate <= to_date(sysdate + 7) ;
+                                and prg.showdate >= to_date(sysdate) and prg.showdate < to_date(sysdate+7) order by showdate,showtime asc; 
+    
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETAVAILABLEMOVIES
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETAVAILABLEMOVIES" (i_optionValue IN INT, i_date IN VARCHAR,i_isToday IN INT,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN 
+  IF (i_isToday=1) THEN 
+     BEGIN
+      OPEN p_cursor FOR select distinct(f.featureid) as id , f.longtitle as name 
+                from programedfilm@ticketlink pf,features@ticketlink f,showtime@ticketlink st
+                where pf.featureid = f.featureid
+                and pf.showtimeid = st.showtimeid
+                and pf.status = 'N'
+                and pf.isprosponed='N'
+                and pf.IsOnline='Y'
+                and pf.showdate = to_date(i_date, 'yyyy-mm-dd')
+                and to_char(st.showtime,'hh24:mi:ss') >= to_char((SYSDATE + i_optionValue/1440), 'hh24:mi:ss');  
+     END; 
+  ELSE
+      BEGIN  
+          OPEN p_cursor FOR select distinct(f.featureid) as id, f.longtitle as name 
+                    from programedfilm@ticketlink pf,features@ticketlink f,showtime@ticketlink st
+                    where pf.featureid = f.featureid
+                    and pf.showtimeid = st.showtimeid
+                    and pf.status = 'N'
+                    and pf.isprosponed='N'
+                    and pf.IsOnline='Y'
+                    and pf.showdate = to_date(i_date, 'yyyy-mm-dd');   
+      END;
+  END IF;
+       
+   
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETAVAILABLEMOVIESHOWTIME
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETAVAILABLEMOVIESHOWTIME" (i_movieId IN INT,i_showdate IN VARCHAR, i_showtimeId IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT prg.programid as programid, prg.boxofficeid as boxofficeid,to_char(st.showtime,'hh24:miAM') as showtime
+            from features@ticketlink ftr, programedfilm@ticketlink prg, showtime@ticketlink st
+            where ftr.featureid = prg.featureid
+            and prg.showtimeid = st.showtimeid
+            and prg.showdate = to_date(i_showdate, 'yyyy-mm-dd')
+            and st.showtimeid = i_showtimeId
+            and ftr.featureid = i_movieId;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETAVAILABLEMOVIESONLINE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETAVAILABLEMOVIESONLINE" (i_optionValue IN INT, fromdate IN VARCHAR,todate IN VARCHAR,i_isToday IN INT,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN 
+  IF (i_isToday=1) THEN 
+     BEGIN
+      OPEN p_cursor FOR select distinct(f.featureid) as id ,f.TRAILERURL as trailerurl, f.longtitle as longname,f.shorttitle as shortname, f.flength, f.synopsis
+                from programedfilm@ticketlink pf,features@ticketlink f,showtime@ticketlink st
+                where pf.featureid = f.featureid
+                and pf.showtimeid = st.showtimeid
+                and pf.status = 'N'
+                and pf.isprosponed='N'
+                and pf.showdate = to_date(fromdate, 'yyyy-mm-dd')
+                and to_char(st.showtime,'hh24:mi:ss') >= to_char((SYSDATE + i_optionValue/1440), 'hh24:mi:ss');  
+     END; 
+  ELSE
+      BEGIN  
+          OPEN p_cursor FOR select distinct(f.featureid) as id,f.TRAILERURL as trailerurl, f.longtitle as longname,f.shorttitle as shortname, f.flength as flength , f.synopsis as synopsis  
+                    from programedfilm@ticketlink pf,features@ticketlink f,showtime@ticketlink st
+                    where pf.featureid = f.featureid
+                    and pf.showtimeid = st.showtimeid
+                    and pf.status = 'N'
+                    and pf.isprosponed='N'
+                    and pf.showdate between to_date(fromdate, 'yyyy-mm-dd') and to_date(todate, 'yyyy-mm-dd');   
+      END;
+  END IF;
+       
+   
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETBLOCKTIME
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETBLOCKTIME" (i_optionId IN VARCHAR, o_optValue OUT VARCHAR)
+    AS
+    BEGIN
+       select optvalue INTO o_optValue from optionbag@ticketlink 
+       where optid= i_optionId;       
+    END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETBOXOFFICEIDBYPROGRAMID
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETBOXOFFICEIDBYPROGRAMID" (i_programId IN INT,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT boxofficeid from programedfilm@ticketlink where programid = i_programId;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETBOXOFFICENAME
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETBOXOFFICENAME" (BOXOFFICEID IN VARCHAR,outSCREENNAME OUT VARCHAR)
+AS
+BEGIN
+SELECT SCREENNAME INTO outSCREENNAME from BOXOFFICE@ticketlink where SCREENID=BOXOFFICEID;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  outSCREENNAME:=null;
+    
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETCARDBYMOBILE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETCARDBYMOBILE" (mobile IN varchar,outCard OUT CHAR)
+AS
+BEGIN
+SELECT cardnum INTO outCard from SCARDBOX@ticketlink where mobileno=mobile and isonline='Y' and isblocked = 'N';
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  outCard:=null;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETCARDDETAILSBYCARDNO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETCARDDETAILSBYCARDNO" (i_cardNo IN VARCHAR, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT actcardno,ticketunitprice,atatimeallowed,perdayallowd,cardtype,CardNum
+                from vw_ticketprice@ticketlink
+                where actcardno = i_cardNo;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETCARDPERMISSIONINFO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETCARDPERMISSIONINFO" (i_cardno IN varchar, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT ATATIMEALLOWED,PERDAYALLOWD
+                from vw_card@ticketlink
+                where ACTCARDNO = i_cardno;      
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETCARDUSERBYCARDNO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETCARDUSERBYCARDNO" (
+       c_cardno IN CHAR,
+       c_cardbalance OUT NUMBER)
+       
+IS
+BEGIN
+ 
+  SELECT CARDBALANCE 
+  INTO c_cardbalance
+  FROM  SCARDBOX@ticketlink WHERE ACTCARDNO = c_cardno;
+ 
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETETICKETMSG
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETETICKETMSG" (in_MSGID IN NUMBER,thisMsgText OUT VARCHAR)
+AS
+BEGIN
+SELECT MSGTEXT INTO thisMsgText from ETICKET_MSG@ticketlink 
+where MSGID=in_MSGID;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  thisMsgText:=null;        
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETFEATUREIMAGE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETFEATUREIMAGE" (in_FEATUREID IN NUMBER,thisFEATUREIMAGE OUT BLOB)
+AS
+BEGIN
+INSERT INTO FEATURESTMP SELECT FEATUREID,FEATUREIMAGE FROM FEATURES@ticketlink WHERE FEATUREID=in_FEATUREID;
+COMMIT;
+SELECT FEATUREIMAGE INTO thisFEATUREIMAGE from FEATURESTMP 
+where FEATUREID=in_FEATUREID;
+
+DELETE from FEATURESTMP;
+COMMIT;
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  thisFEATUREIMAGE:=null;        
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETLASTTRANIDFROMMASTERDETAILS
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETLASTTRANIDFROMMASTERDETAILS" (initialValueForTranId IN VARCHAR,onlinetransId OUT NUMBER) 
+  AS
+   BEGIN
+      select MAX(onlinetransId) into onlinetransId from onlinesalemaster@ticketlink where ONLINETRANSID like upper(initialValueForTranId)||'%';
+   END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETMAXTRANIDFROMMASTER
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETMAXTRANIDFROMMASTER" (in_lower IN NUMBER,in_upper IN NUMBER,out_transId OUT NUMBER) 
+  AS
+   BEGIN
+      select MAX(onlinetransId) into out_transId from onlinesalemaster@ticketlink where ONLINETRANSID BETWEEN in_lower AND in_upper ;
+   END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETMOVIEINFO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETMOVIEINFO" (movieID IN INT,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN 
+       OPEN p_cursor FOR select distinct(f.featureid) as id , f.trailerurl, f.longtitle as longname,f.shorttitle as shortname, f.flength, f.synopsis
+                from programedfilm@ticketlink pf,features@ticketlink f
+                where pf.featureid=f.featureid and pf.featureid = movieID
+                and pf.status = 'N'
+                and pf.isprosponed='N';
+                
+        
+     END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETMOVIESBYDATE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETMOVIESBYDATE" (i_optionValue IN VARCHAR2,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN 
+   
+          OPEN p_cursor FOR select distinct(f.featureid) as id,to_char(st.showtime,'hh24:mi:ss') as showtime , f.TRAILERURL as trailerurl, pf.showdate as showdate, f.longtitle as longname,f.shorttitle as shortname, f.flength as flength , f.synopsis as synopsis  
+                    from programedfilm@ticketlink pf,features@ticketlink f,showtime@ticketlink st
+                    where pf.featureid = f.featureid
+                    and pf.showtimeid = st.showtimeid
+                    and pf.boxofficeid = st.boxofficeid
+                    and pf.status = 'N' and pf.IsOnline='Y'
+                    and pf.isprosponed='N'
+                     and pf.showdate >= to_date(sysdate) and pf.showdate <= to_date(sysdate+7);   
+            
+   
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETMOVIEUNITPRICE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETMOVIEUNITPRICE" (i_boxofficeid IN INT,i_programid IN INT,i_classheirarchey IN INT,i_featureid IN INT,i_showimeid IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT TicketUnitPrice
+                from vw_ticketprice@ticketlink
+                where BOXOFFICEID = i_boxofficeid
+                AND PROGRAMID = i_programid  
+                AND CLASSHEIRARCHEY = i_classheirarchey 
+                AND FEATUREID = i_featureid 
+                AND SHOWTIMEID = i_showimeid;      
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETONLINEMOVIESHOWTIME
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETONLINEMOVIESHOWTIME" (i_movieId IN INT,fromdate IN VARCHAR,todate IN VARCHAR, i_optionValue IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT prg.showdate as showdate, to_char(st.showtime,'hh24:miAM') as showtime,
+                                st.showtimeid as showtimeid, prg.programid as programid, prg.boxofficeid as boxofficeid
+                                from programedfilm@ticketlink prg,showtime@ticketlink st
+                                where prg.showtimeid = st.showtimeid
+                                and prg.boxofficeid = st.boxofficeid
+                                and prg.featureid = i_movieId
+                                and prg.IsOnline='Y' AND prg.Status='N'
+            and prg.showdate  between to_date(fromdate, 'yyyy-mm-dd') and to_date(todate, 'yyyy-mm-dd');
+            
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETONLINESEATS
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETONLINESEATS" (i_cardType IN INT, i_boxofficeId IN VARCHAR, i_programId IN INT,isLinkedPrg IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN
+    OPEN p_cursor FOR SELECT count(sp.seatseqid) qty
+            from seatplan@ticketlink sp, programedFilm@ticketlink pf,TicketBook@ticketlink tb
+            where sp.boxofficeid = pf.boxofficeid
+            AND pf.ProgramId=tb.ProgramId AND sp.SeatSeqId=tb.TicketSeqId
+            and sp.isonline='Y' AND pf.IsOnline='Y' AND tb.Status='B'
+            and tb.ticketnumber not in (select ONLINETICKETID from ONLINESALEDETAILSLOG@ticketlink where is_booked='Y')
+            and sp.classheirarchey= i_cardType
+            and pf.programId = i_programId;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETPROFILECARDBYEMAIL
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETPROFILECARDBYEMAIL" (EMAILID IN VARCHAR2,outCARD OUT VARCHAR2)
+AS
+BEGIN
+SELECT actcardno INTO outCARD from SCARDPROFILE@ticketlink where EMAIL=EMAILID and STATUS='Y';
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  outCARD:=null;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETPROFILEEMAILBYCARDNO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETPROFILEEMAILBYCARDNO" (CARDNO IN VARCHAR,outEMAIL OUT VARCHAR)
+AS
+BEGIN
+SELECT EMAIL INTO outEMAIL from SCARDPROFILE@ticketlink where actcardno=CARDNO and STATUS='Y';
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  outEMAIL:=null;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSCARDBOXBYCARDNO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSCARDBOXBYCARDNO" (i_cardNo IN VARCHAR,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  OPEN p_cursor FOR SELECT cardbalance,tikbalance,isblocked,scardstatus 
+  from scardbox@ticketlink 
+  where actcardno=i_cardNo and scardStatus='S' and isblocked='N';
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSCARDBOXMOBILENO
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSCARDBOXMOBILENO" (cardNo IN CHAR,outMobile OUT VARCHAR2)
+AS
+BEGIN
+SELECT mobileno INTO outMobile from SCARDBOX@ticketlink where cardnum=cardNo and isonline='Y' and isblocked = 'N';
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  outMobile:=null;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSCARDPROFILE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSCARDPROFILE" (CARDNO IN VARCHAR,outFIRSTNAME OUT VARCHAR,outMIDDLENAME OUT VARCHAR,outLASTNAME OUT VARCHAR,outEMAIL OUT VARCHAR,outGENDER OUT VARCHAR,outBIRTHDATE OUT VARCHAR,outMOBILENO OUT VARCHAR,outSTATUS OUT CHAR)
+AS
+BEGIN
+SELECT FIRSTNAME,MIDDLENAME,LASTNAME,EMAIL,GENDER,BIRTHDATE,MOBILENO,STATUS INTO outFIRSTNAME,outMIDDLENAME,outLASTNAME,outEMAIL,outGENDER,outBIRTHDATE,outMOBILENO,outSTATUS from SCARDPROFILE@ticketlink where actcardno=CARDNO  and STATUS='Y';
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  outFIRSTNAME:=null;
+  outMIDDLENAME:=null;
+  outLASTNAME:=null;
+  outEMAIL:=null;
+  outGENDER:=null;
+  outBIRTHDATE:=null;
+  outMOBILENO:=null; 
+  outSTATUS:=null;  
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSEATCOUNT
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSEATCOUNT" (i_cardType IN INT, i_boxofficeId IN VARCHAR, i_programId IN INT,isLinkedPrg IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN 
+  IF (isLinkedPrg = 1) THEN
+    BEGIN 
+      OPEN p_cursor FOR SELECT tbl1.cnt1-tbl2.cnt2 as qty from (select count(sp.seatseqid) as cnt1
+            from seatplan@ticketlink sp
+            where sp.isonline='Y'
+            and sp.classheirarchey= i_cardType
+            and sp.boxofficeid = i_boxofficeId) tbl1,
+            (select count(sp.seatseqid) as cnt2
+            from seatplan@ticketlink sp, ticketbook@ticketlink tb
+            where sp.seatseqid = tb.ticketseqid
+            and sp.isonline='Y' and tb.Status='S'
+            and sp.classheirarchey= i_cardType
+            and sp.boxofficeid = i_boxofficeId
+            and tb.programid = i_programId) tbl2;
+    END;
+  ELSE
+    BEGIN
+    OPEN p_cursor FOR SELECT count(sp.seatseqid) qty
+            from seatplan@ticketlink sp, programedFilm@ticketlink pf,TicketBook@ticketlink tb
+            where sp.boxofficeid = pf.boxofficeid
+            AND pf.ProgramId=tb.ProgramId AND sp.SeatSeqId=tb.TicketSeqId
+            and sp.isonline='Y' AND pf.IsOnline='Y' AND tb.Status='B'
+            and tb.ticketnumber not in (select ONLINETICKETID from ONLINESALEDETAILSLOG@ticketlink where is_booked='Y')
+            and sp.classheirarchey= i_cardType
+            and pf.programId = i_programId;
+    END; 
+  END IF;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSEATSEQIDS
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSEATSEQIDS" (i_cardType IN INT,i_boxofficeId IN VARCHAR,i_programId IN INT,isLinkedPrg IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN 
+  IF (isLinkedPrg = 1) THEN 
+   BEGIN
+      OPEN p_cursor FOR SELECT sp.seatseqid as seatseqids
+                from seatplan@ticketlink sp, programedFilm@ticketlink pf
+                where sp.boxofficeid = pf.boxofficeid
+                and sp.isonline='Y'
+                and sp.classheirarchey= i_cardType
+                and sp.boxofficeid = i_boxofficeId
+                and pf.programId = i_programId
+                minus
+                select tb.ticketseqid as seatseqids
+                from ticketbook@ticketlink tb,programedFilm@ticketlink pf 
+                where tb.PROGRAMID=pf.PROGRAMID  AND pf.IsOnline='Y' AND tb.STATUS='S'
+                AND tb.programid = i_programId;
+   END;
+  ELSE
+   BEGIN
+      OPEN p_cursor FOR SELECT sp.seatseqid as seatseqids
+            from seatplan@ticketlink sp, programedFilm@ticketlink pf
+            where sp.boxofficeid = pf.boxofficeid
+            and sp.isonline='Y'
+            and sp.classheirarchey= i_cardType
+            and pf.programId = i_programId ;
+   END;
+  END IF;
+  
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSHOWTIMELISTBYMOVIE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSHOWTIMELISTBYMOVIE" (i_movieId IN INT, i_date IN VARCHAR, i_optionValue IN INT,i_isToday IN INT,p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN  
+  IF (i_isToday=1) THEN 
+     BEGIN 
+      OPEN p_cursor FOR SELECT prg.showdate as showdate, to_char(st.showtime,'hh24:miAM') as showtime,
+                st.showtimeid as showtimeid, prg.programid as programid, prg.boxofficeid as boxofficeid
+                from programedfilm@ticketlink prg,showtime@ticketlink st
+                where prg.showtimeid = st.showtimeid
+                and prg.boxofficeid = st.boxofficeid
+                and prg.featureid = i_movieId
+                and prg.IsOnline='Y' AND prg.Status='N'
+                AND prg.ISPROSPONED = 'N'
+                and prg.showdate=to_date(i_date, 'yyyy-mm-dd')
+                and to_char(st.showtime,'hh24:mi:ss') >= to_char((SYSDATE + i_optionValue/1440), 'hh24:mi:ss'); 
+    END;
+  ELSE
+     BEGIN
+    OPEN p_cursor FOR SELECT prg.showdate as showdate, to_char(st.showtime,'hh24:miAM') as showtime,
+                                st.showtimeid as showtimeid, prg.programid as programid, prg.boxofficeid as boxofficeid
+                                from programedfilm@ticketlink prg,showtime@ticketlink st
+                                where prg.showtimeid = st.showtimeid
+                                and prg.boxofficeid = st.boxofficeid
+                                and prg.featureid = i_movieId
+                                and prg.IsOnline='Y' AND prg.Status='N'
+                                AND prg.ISPROSPONED = 'N'
+                                and prg.showdate=to_date(i_date, 'yyyy-mm-dd');
+     END; 
+  END IF;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSOLDONLINESEATS
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSOLDONLINESEATS" (i_cardType IN INT, i_boxofficeId IN VARCHAR, i_programId IN INT,isLinkedPrg IN INT, p_cursor OUT SYS_REFCURSOR)
+AS
+BEGIN
+    OPEN p_cursor FOR select count(sp.seatseqid) as QTY
+            from seatplan@ticketlink sp, ticketbook@ticketlink tb
+            where sp.seatseqid = tb.ticketseqid
+            and sp.isonline='Y' and tb.Status='S'
+            and sp.classheirarchey= i_cardType
+            and sp.boxofficeid = i_boxofficeId
+            and tb.programid = i_programId;
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETSTATUS
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETSTATUS" (CARDNO IN VARCHAR,currentDate IN DATE,thisCardBal OUT NUMBER,thisTikBal OUT NUMBER,thisActCardNo OUT VARCHAR)
+AS
+BEGIN
+SELECT cardBalance,tikBalance,actCardNo INTO thisCardBal,thisTikBal,thisActCardNo from SCARDBOX@ticketlink where actcardno=CARDNO and DURFROM <= currentDate and DURTO>= currentDate and SCARDSTATUS='S';
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+  thisCardBal:=null;
+  thisTikBal:=null;
+  thisActCardNo:=null;         
+END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure GETUSERBYCARDMOBILE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."GETUSERBYCARDMOBILE" (card IN CHAR,mobile IN VARCHAR,outCARD OUT VARCHAR)
+AS
+BEGIN
+
+SELECT CARDNUM INTO outCARD from SCARDBOX@ticketlink where cardnum=card and mobileno = mobile and isonline='Y' and isblocked = 'N';
+--SELECT CARDNUM INTO outCARD from SCARDBOX@ticketlink where cardnum=card;
+--SELECT CARDNUM INTO outCARD from SCARDBOX@ticketlink where cardnum=card and mobileno = mobile and isonline='Y' and isblocked = 'N';
+-- and MOBILENO = mobile and ISONLINE='Y'and ISBLOCKED= 'N';
+EXCEPTION
+ WHEN NO_DATA_FOUND THEN
+  outCARD:=null;
+END;
+
+
+
+--SELECT CARDNUM from SCARDBOX@ticketlink where cardnum='EC4000' and MOBILENO = '1713144221' and ISONLINE='Y'and ISBLOCKED= 'N'; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure UPDATESCARDBOXBALANCE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."UPDATESCARDBOXBALANCE" (thisCardNo IN VARCHAR,inCardBalance IN NUMBER, inUpdatedDate IN VARCHAR,row OUT NUMBER) 
+  IS
+   BEGIN
+      UPDATE scardbox@ticketlink SET cardBalance=inCardBalance,updatedby=thisCardNo,updateddate=to_date(inUpdatedDate, 'yyyy-mm-dd') WHERE actcardno=thisCardNo;
+    
+      IF SQL%NOTFOUND THEN
+         row:=0;
+      ELSE
+    row:=1;
+      END IF;
+   END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure UPDATESCARDBOXPASSCHANGESTATUS
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."UPDATESCARDBOXPASSCHANGESTATUS" (thisCardNo IN CHAR,thisCardPass IN VARCHAR,inUpdatedDate IN VARCHAR,inSalt IN VARCHAR,row OUT NUMBER)
+  IS
+   BEGIN
+      --UPDATE scardbox@ticketlink SET CARDPASS = thisCardPass, ISPASSCHANGED='Y',updatedby=thisCardNo,salt=inSalt,updateddate=to_date(inUpdatedDate, 'yyyy-mm-dd') WHERE ACTCARDNO=thisCardNo and isblocked='N' and ISONLINE='Y';
+        UPDATE scardbox@ticketlink SET CARDPASS = thisCardPass, ISPASSCHANGED='Y',updatedby=thisCardNo,salt=inSalt,updateddate=to_date(inUpdatedDate, 'yyyy-mm-dd') WHERE CARDNUM=thisCardNo and isblocked='N' and ISONLINE='Y';
+      IF SQL%NOTFOUND THEN
+         row:=0;
+      ELSE
+    row:=1;
+      END IF;
+   END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure UPDATESCARDBOXSTATUS
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."UPDATESCARDBOXSTATUS" (thisCardNo IN VARCHAR,inUpdatedDate IN VARCHAR,row OUT NUMBER) 
+  IS
+   BEGIN
+      UPDATE scardbox@ticketlink SET scardstatus='S',updatedby=thisCardNo,updateddate=to_date(inUpdatedDate, 'yyyy-mm-dd') WHERE actcardno=thisCardNo and isblocked='N';
+    
+      IF SQL%NOTFOUND THEN
+         row:=0;
+      ELSE
+    row:=1;
+      END IF;
+   END; 
+
+/
+--------------------------------------------------------
+--  DDL for Procedure UPDATESCARDPROFILE
+--------------------------------------------------------
+set define off;
+
+  CREATE OR REPLACE PROCEDURE "CINETICKET3"."UPDATESCARDPROFILE" (thisCardNo IN VARCHAR2,thisFIRSTNAME IN VARCHAR2,thisMIDDLENAME IN VARCHAR2,thisLASTNAME IN VARCHAR2,thisEMAIL IN VARCHAR2,thisBIRTHDATE IN VARCHAR,thisGENDER IN VARCHAR2,thisINSERTEDDATE IN VARCHAR,thisMOBILENO IN VARCHAR2,thisSTATUS IN CHAR, row OUT NUMBER)
+  IS
+   BEGIN
+      UPDATE SCARDPROFILE@ticketlink SET FIRSTNAME=thisFIRSTNAME,MIDDLENAME=thisMIDDLENAME,LASTNAME=thisLASTNAME,EMAIL=thisEMAIL,BIRTHDATE=to_date(thisBIRTHDATE,'yyyy-mm-dd'),GENDER=thisGENDER,INSERTEDDATE=to_date(thisINSERTEDDATE,'yyyy-mm-dd'),MOBILENO=thisMOBILENO,STATUS=thisSTATUS WHERE actcardno=thisCardNo and STATUS='Y';    
+      IF SQL%NOTFOUND THEN
+         row:=0;
+      ELSE
+    row:=1;
+      END IF;
+   END; 
+
+/

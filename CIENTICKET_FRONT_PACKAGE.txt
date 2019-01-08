@@ -1,0 +1,205 @@
+--------------------------------------------------------
+--  File created - Tuesday-January-08-2019   
+--------------------------------------------------------
+--------------------------------------------------------
+--  DDL for Package PKG_AUDIT
+--------------------------------------------------------
+
+  CREATE OR REPLACE PACKAGE "CINETICKET3"."PKG_AUDIT" AS
+ PROCEDURE InsertData
+    (
+    LOG_ID IN NUMBER,
+    USERBY IN VARCHAR2,
+    AUDIT_DETAIL IN AUDIT_INFO.DETAIL%TYPE,
+    IPADDRESS IN VARCHAR2
+          
+    );
+     PROCEDURE AuditData
+    (
+    LOG_ID IN NUMBER,
+    USERBY IN VARCHAR2,
+    AUDIT_DETAIL IN AUDIT_INFO.DETAIL%TYPE,
+    IPADDRESS IN VARCHAR2
+          
+    );
+END PKG_AUDIT; 
+
+/
+--------------------------------------------------------
+--  DDL for Package PKG_CINE_API
+--------------------------------------------------------
+
+  CREATE OR REPLACE PACKAGE "CINETICKET3"."PKG_CINE_API" AS
+
+PROCEDURE cineApiPurchaseLog
+    (
+        i_tranid IN NUMBER,
+        i_trandatefrom IN VARCHAR2,
+        i_trandateto IN VARCHAR2,
+        i_status IN VARCHAR2,
+        result out NUMBER,
+        p_cursor OUT SYS_REFCURSOR
+    );
+    
+
+END PKG_CINE_API; 
+
+/
+--------------------------------------------------------
+--  DDL for Package PKG_CUSTOMER_PROFILE
+--------------------------------------------------------
+
+  CREATE OR REPLACE PACKAGE "CINETICKET3"."PKG_CUSTOMER_PROFILE" AS
+ PROCEDURE InsertCustomerProfile
+    (
+    
+        i_loginusername IN VARCHAR2,                 
+        i_loginpassword IN VARCHAR2,                 
+        i_name IN VARCHAR2,                     
+        i_gender IN VARCHAR2,                  
+        i_dob IN VARCHAR2,                    
+        i_email IN VARCHAR2,                  
+        i_mobile IN VARCHAR2,                   
+        i_profileextra IN VARCHAR2 ,           
+        i_isemailverified IN VARCHAR2,     
+        i_issmsverified IN VARCHAR2,                    
+        i_emailverificationcode IN VARCHAR2,
+        i_smsverificationcode IN VARCHAR2,   
+        i_passwordrecoverycode IN VARCHAR2,  
+        i_action IN NUMBER,
+        result out NUMBER
+          
+    );
+ 
+ PROCEDURE UpdateCustomerProfile
+    (
+    
+        i_loginusername IN VARCHAR2,                 
+        i_loginpassword IN VARCHAR2,                 
+        i_name IN VARCHAR2,                     
+        i_gender IN VARCHAR2,                  
+        i_dob IN VARCHAR2,                    
+        i_email IN VARCHAR2,                  
+        i_mobile IN VARCHAR2,                   
+        i_profileextra IN VARCHAR2 ,           
+        i_isemailverified IN VARCHAR2,     
+        i_issmsverified IN VARCHAR2,                    
+        i_emailverificationcode IN VARCHAR2,
+        i_smsverificationcode IN VARCHAR2,   
+        i_passwordrecoverycode IN VARCHAR2,  
+        i_action IN NUMBER,
+        result out NUMBER
+          
+    );
+       
+ PROCEDURE SelectCustomerProfile
+    (
+    
+        i_loginusername IN VARCHAR2,                 
+        i_action IN NUMBER,
+        result out NUMBER,
+        p_cursor OUT SYS_REFCURSOR
+          
+    ); 
+ 
+  
+END PKG_CUSTOMER_PROFILE; 
+
+/
+--------------------------------------------------------
+--  DDL for Package PKG_TICKE_PURCHAGE
+--------------------------------------------------------
+
+  CREATE OR REPLACE PACKAGE "CINETICKET3"."PKG_TICKE_PURCHAGE" AS
+ PROCEDURE InsertConcessionBookingData
+    (
+    
+        i_itemcode IN NUMBER, 
+        i_noofitems IN NUMBER,
+        i_totalamount IN NUMBER,
+        i_mobilenumber IN varchar2,
+        i_showdate IN varchar2,
+        i_customername IN varchar2,
+        i_agentname IN varchar2,
+        result out NUMBER
+          
+    );
+    
+ PROCEDURE InsertTransactionData
+    (
+    
+        i_programid IN NUMBER,
+        i_nooftickets IN NUMBER,
+        i_totalamount IN NUMBER,
+        i_mobilenumber IN varchar2,
+        i_seattype IN NUMBER,
+        i_showdate IN varchar2,
+        i_customername IN varchar2,
+        result out NUMBER
+          
+    );
+    
+ PROCEDURE InsertBookingData_Bak
+    (
+    
+        i_programid IN NUMBER,
+        i_nooftickets IN NUMBER,
+        i_totalamount IN NUMBER,
+        i_mobilenumber IN varchar2,
+        i_seattype IN NUMBER,
+        i_showdate IN varchar2,
+        i_customername IN varchar2,
+        i_agentname IN varchar2,
+        result out NUMBER
+          
+    );
+    
+    PROCEDURE InsertBookingData
+    (
+    
+        i_programid IN NUMBER,
+        i_featureid IN NUMBER, 
+        i_nooftickets IN NUMBER,
+        i_totalamount IN NUMBER,
+        i_mobilenumber IN varchar2,
+        i_seattype IN NUMBER,
+        i_showdate IN varchar2,
+        i_customername IN varchar2,
+        i_agentname IN varchar2,
+        result out NUMBER
+          
+    );
+    
+  PROCEDURE confirmTransactionData
+    (
+    
+        i_trancode IN varchar2,
+        i_tickamt IN varchar2,
+        result out NUMBER
+          
+    );  
+    
+
+  PROCEDURE confirmConcessionTransData
+    (
+    
+        i_trancode IN varchar2,
+        i_concessionamt IN varchar2,
+        result out NUMBER
+          
+    );    
+PROCEDURE cancelTransaction
+    (
+    
+        i_programid IN NUMBER,
+        i_nooftickets IN NUMBER,
+        i_totalamount IN NUMBER,
+        i_bookingid IN NUMBER,
+        i_agentname IN varchar2,
+        result out NUMBER
+          
+    );       
+    
+END PKG_TICKE_PURCHAGE; 
+
+/

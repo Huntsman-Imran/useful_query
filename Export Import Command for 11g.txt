@@ -1,0 +1,9 @@
+Export Command in 11g:
+expdp jms/jms@orclg2 DUMPFILE=jms05.dmp
+
+Import Command in 11g:
+D:\impdp smbbo3/smbbo3@orclg2 DIRECTORY=data_pump_dir DUMPFILE=smbbo20181112.d
+mp remap_schema=smbbo:smbbo3;
+
+impdp jms05/jms05@orclg2 DIRECTORY=data_pump_dir DUMPFILE=JMS05.DMP remap_schema=jms:jms05
+

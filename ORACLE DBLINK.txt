@@ -1,0 +1,16 @@
+
+CREATE DATABASE LINK cineticket3
+  CONNECT TO smbbo3 IDENTIFIED BY 'smbbo3' 
+  USING libpq 'orclg2';
+
+
+CREATE DATABASE LINK dblinkname
+CONNECT TO $usename
+IDENTIFIED BY $password
+USING '$sid';
+
+
+
+SQL> Create Public Database Link cineticket3
+  2  Connect To smbbo3 Identified By smbbo3
+  3  using '$orclg2';

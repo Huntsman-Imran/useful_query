@@ -1,0 +1,26 @@
+Enter user-name: sys/sys@orclg2 as sysdba
+
+Connected to:
+Oracle Database 11g Enterprise Edition Release 11.2.0.1.0 - Production
+With the Partitioning, OLAP, Data Mining and Real Application Testing options
+
+SQL> conn sys / as sysdba
+
+SQL> create tablespace smbbo_default
+  2  datafile 'C:\app\DELL\oradata\oracle11\smbbo_default' size 800M;
+
+Tablespace created.
+
+SQL> create tablespace Ticket_Sale
+  2  datafile 'C:\app\DELL\oradata\oracle11\ticket_Sale' size 500M;
+
+Tablespace created.
+
+SQL> create user smbbo identified by smbbo default tablespace smbbo_default;
+
+User created.
+
+SQL> grant dba to smbbo;
+
+Grant succeeded.
+

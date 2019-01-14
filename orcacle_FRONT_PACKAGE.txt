@@ -24,6 +24,85 @@
     );
 END PKG_AUDIT; 
 
+
+
+
+
+
+create or replace PACKAGE BODY             PKG_AUDIT AS
+
+PROCEDURE InsertData
+    (
+    LOG_ID IN NUMBER,
+    USERBY IN VARCHAR2,
+    AUDIT_DETAIL IN AUDIT_INFO.DETAIL%TYPE,
+    IPADDRESS IN VARCHAR2
+          
+    )
+  AS 
+    
+   BEGIN 
+INSERT INTO AUDIT_INFO (
+    AUDIT_INFO_ID,
+    AUDIT_LOG_ID ,
+    USER_ID,
+    CREATE_DATE,
+    DETAIL,
+    IPADDRESS,
+    IS_ACTIVE ,
+    IS_DELETED
+   )
+VALUES (
+   SCQ_AUDIT_INFO.nextval,
+    LOG_ID,
+    USERBY,
+    SYSDATE,
+    AUDIT_DETAIL,
+    IPADDRESS,
+    'Y',
+    'N'
+    
+    );
+   
+
+    END InsertData;
+    PROCEDURE AuditData
+    (
+    LOG_ID IN NUMBER,
+    USERBY IN VARCHAR2,
+    AUDIT_DETAIL IN AUDIT_INFO.DETAIL%TYPE,
+    IPADDRESS IN VARCHAR2
+          
+    )
+  AS 
+    
+   BEGIN 
+INSERT INTO AUDIT_INFO (
+    AUDIT_INFO_ID,
+    AUDIT_LOG_ID ,
+    USER_ID,
+    CREATE_DATE,
+    DETAIL,
+    IPADDRESS,
+    IS_ACTIVE ,
+    IS_DELETED
+   )
+VALUES (
+   SCQ_AUDIT_INFO.nextval,
+    LOG_ID,
+    USERBY,
+    SYSDATE,
+    AUDIT_DETAIL,
+    IPADDRESS,
+    'Y',
+    'N'
+    
+    );
+    commit;
+    END AuditData;
+
+END PKG_AUDIT; 
+
 /
 --------------------------------------------------------
 --  DDL for Package PKG_CINE_API
@@ -203,3 +282,1762 @@ PROCEDURE cancelTransaction
 END PKG_TICKE_PURCHAGE; 
 
 /
+
+
+
+
+
+
+
+create or replace PACKAGE BODY             PKG_BBO_TICKET_SERVICE AS
+
+PROCEDURE PROC_GET_TICKETOPTIONVALUE(p_optionId IN VARCHAR2,p_cursor_option OUT SYS_REFCURSOR)
+AS
+BEGIN 
+       OPEN p_cursor_option FOR 
+       select optvalue from optionbag@ticketlink 
+       where optid= p_optionId;
+END PROC_GET_TICKETOPTIONVALUE;
+PROCEDURE PROC_GET_SHOWDATES(p_cursor_date OUT SYS_REFCURSOR)
+AS
+BEGIN 
+    OPEN p_cursor_date FOR
+        SELECT distinct TO_CHAR(pf.showdate,'DD-MON-YYYY') as showdate 
+        FROM programedfilm@ticketlink pf
+        WHERE pf.status = 'N' and pf.IsOnline='Y'
+        AND pf.isprosponed='N'
+        AND pf.showdate >= to_date(sysdate) and pf.showdate <= to_date(sysdate+1);
+END PROC_GET_SHOWDATES;
+
+PROCEDURE PROC_GET_MOVIES(p_showdate in Date, p_cursor_movie OUT SYS_REFCURSOR)
+AS
+BEGIN 
+    OPEN p_cursor_movie FOR
+        SELECT distinct(f.featureid) as id, f.TRAILERURL as trailerurl, TO_CHAR(pf.showdate,'DD-MON-YYYY') as showdate, f.longtitle as longname,f.shorttitle as shortname, f.flength as flength , f.synopsis as synopsis  
+        FROM programedfilm@ticketlink pf,features@ticketlink f
+        WHERE pf.featureid = f.featureid
+        AND pf.status = 'N' and pf.IsOnline='Y'
+        AND pf.isprosponed='N'
+        AND pf.showdate >= to_date(sysdate) and pf.showdate <= to_date(sysdate+1)
+        AND pf.showdate=p_showdate;
+        
+END PROC_GET_MOVIES;
+
+PROCEDURE PROC_GET_SHOWTIME(p_showdate IN Date,p_featureid IN number, p_cursor_time OUT SYS_REFCURSOR)
+AS
+BEGIN 
+    OPEN p_cursor_time FOR
+        SELECT distinct pf.programid,(pf.featureid) as id,
+        to_char(st.showtime,'hh24:mi:ss') as showtime,TO_CHAR(pf.showdate,'DD-MON-YYYY') as showdate,
+        to_char(sysdate,'YYYY-MM-DD hh24:mi') as systemdate 
+        FROM programedfilm@ticketlink pf, showtime@ticketlink st
+        WHERE pf.showtimeid = st.showtimeid
+        AND pf.boxofficeid = st.boxofficeid
+        AND pf.status = 'N' and pf.IsOnline='Y'
+        AND pf.isprosponed='N'
+        AND pf.showdate >= to_date(sysdate) and pf.showdate <= to_date(sysdate+1)
+        AND pf.showdate=p_showdate
+        AND pf.featureid=p_featureid
+        ORDER BY showtime;
+        
+END PROC_GET_SHOWTIME;
+
+PROCEDURE PROC_VALIDATE_SHOWTIME(p_programid IN number, p_cursor_time OUT SYS_REFCURSOR)
+AS
+BEGIN 
+    OPEN p_cursor_time FOR
+        SELECT distinct pf.programid,(pf.featureid) as id,
+        to_char(st.showtime,'hh24:mi:ss') as showtime,TO_CHAR(pf.showdate,'DD-MON-YYYY') as showdate,
+        to_char(sysdate,'YYYY-MM-DD hh24:mi') as systemdate 
+        FROM programedfilm@ticketlink pf, showtime@ticketlink st
+        WHERE pf.showtimeid = st.showtimeid
+        AND pf.boxofficeid = st.boxofficeid
+        AND pf.status = 'N' and pf.IsOnline='Y'
+        AND pf.isprosponed='N'
+        AND pf.showdate >= to_date(sysdate) and pf.showdate <= to_date(sysdate+1)
+        AND pf.programid=p_programid
+        ORDER BY showtime;
+        
+END PROC_VALIDATE_SHOWTIME;
+
+PROCEDURE PROC_GET_SEATTYPE(p_programid IN number, p_cursor_seattype OUT SYS_REFCURSOR)
+AS
+BEGIN 
+    OPEN p_cursor_seattype FOR
+        SELECT sp.classheirarchey as SeatType,count(*) as SeatCount
+        FROM seatplan@ticketlink sp, programedFilm@ticketlink pf,TicketBook@ticketlink tb
+        WHERE sp.boxofficeid = pf.boxofficeid
+        AND pf.ProgramId=tb.ProgramId AND sp.SeatSeqId=tb.TicketSeqId
+        AND sp.isonline='Y' AND pf.IsOnline='Y' AND tb.Status='B'
+        AND pf.showdate >= to_date(sysdate) and pf.showdate <= to_date(sysdate+1)
+        AND pf.programId = p_programid
+        GROUP BY sp.classheirarchey
+        HAVING count(*)>0;
+        
+END PROC_GET_SEATTYPE;
+
+PROCEDURE PROC_VALIDATE_SEAT(p_programid IN number,p_classheirarchey IN Number, p_cursor_seattype OUT SYS_REFCURSOR)
+AS
+BEGIN 
+    OPEN p_cursor_seattype FOR
+        SELECT sp.classheirarchey as SeatType,count(*) as SeatCount
+        FROM seatplan@ticketlink sp, programedFilm@ticketlink pf,TicketBook@ticketlink tb
+        WHERE sp.boxofficeid = pf.boxofficeid
+        AND pf.ProgramId=tb.ProgramId AND sp.SeatSeqId=tb.TicketSeqId
+        AND sp.isonline='Y' AND pf.IsOnline='Y' AND tb.Status='B'
+        AND pf.showdate >= to_date(sysdate) and pf.showdate <= to_date(sysdate+1)
+        AND pf.programId = p_programid
+        AND sp.classheirarchey=p_classheirarchey
+        GROUP BY sp.classheirarchey 
+        HAVING count(*)>0;
+        
+END PROC_VALIDATE_SEAT;
+
+PROCEDURE PROC_GET_TICKETUNITPRICE(p_programid IN number,p_classheirarchey IN Number, p_cursor_price OUT SYS_REFCURSOR)
+AS
+
+BEGIN 
+        OPEN p_cursor_price FOR
+        SELECT TicketUnitPrice
+        FROM vw_ticketprice@ticketlink
+        WHERE PROGRAMID=p_programid and CLASSHEIRARCHEY=p_classheirarchey;   
+     
+END PROC_GET_TICKETUNITPRICE;
+
+
+END PKG_BBO_TICKET_SERVICE; 
+
+
+
+create or replace PACKAGE BODY             PKG_CINE_API AS
+PROCEDURE cineApiPurchaseLog
+    (
+        i_tranid IN NUMBER,
+        i_trandatefrom IN VARCHAR2,
+        i_trandateto IN VARCHAR2,
+        i_status IN VARCHAR2,
+        result out NUMBER,
+        p_cursor OUT SYS_REFCURSOR
+    )
+    AS
+      var_cond varchar2(500);
+    BEGIN
+        var_cond:='';
+        if i_tranid<>0 then
+           var_cond:=var_cond + ' AND A.ONLINETRANSID=i_tranid';
+        end if;
+         result:=109;
+         
+         --select MAX(ID) into out_custId from CUSTOMERPROFILE; 
+         
+         
+                  
+          OPEN p_cursor FOR  
+          
+          SELECT    TO_CHAR(A.ONLINETRASDATE,'DD-MON-YYYY') AS TRANSDATE,TO_CHAR(A.ONLINETRASDATE,'hh24:mm:ss') AS TRANSTIME, 
+                    A.ONLINETRANSID AS TRANSID,B.ONLINETRANSID AS SMSCODE,D.LONGTITLE AS MOVIE,
+                    TO_CHAR(A.SHOWDATE,'DD-MON-YYYY') AS SHOWDATE, TO_CHAR(E.SHOWTIME,'hh24:mm:ss') AS SHOWTIME,
+                    A.ONLINETICKETQTY AS QTY,A.ONLINEAMTTENDERED AS AMOUNT,F.CLASSTITLE,
+                    A.CUSTOMER_NAME,A.MOBILENO,A.IS_BOOKED,A.INSERTEDBY
+          FROM      ONLINESALEMASTERLOG@ticketlink A LEFT OUTER JOIN ONLINESALEMASTER@ticketlink B ON A.TRASACTION_ID=B.ONLINETRANSID
+                    INNER JOIN PROGRAMEDFILM@ticketlink C ON A.PROGRAMID=C.PROGRAMID
+                    INNER JOIN FEATURES@ticketlink D ON C.FEATUREID=D.FEATUREID 
+                    INNER JOIN SHOWTIME@ticketlink E ON C.SHOWTIMEID=E.SHOWTIMEID AND C.BOXOFFICEID=E.BOXOFFICEID
+                    INNER JOIN BOXOFFICECLASSES@ticketlink F ON C.BOXOFFICEID=F.BOXOFFICEID AND A.SEAT_TYPE=F.CLASSHEIRARCHEY 
+                    WHERE 1=1 + var_cond;
+
+         
+     EXCEPTION
+       WHEN OTHERS THEN
+       result :=101;
+       -- Consider logging the error and then re-raise
+     --  RAISE;
+     rollback;
+      
+    END cineApiPurchaseLog;
+    
+    
+END PKG_CINE_API; 
+
+create or replace PACKAGE BODY             PKG_CUSTOMER_PROFILE AS
+PROCEDURE InsertCustomerProfile
+    (
+        i_loginusername IN VARCHAR2,                 
+        i_loginpassword IN VARCHAR2,                 
+        i_name IN VARCHAR2,                     
+        i_gender IN VARCHAR2,                  
+        i_dob IN VARCHAR2,                    
+        i_email IN VARCHAR2,                  
+        i_mobile IN VARCHAR2,                   
+        i_profileextra IN VARCHAR2 ,           
+        i_isemailverified IN VARCHAR2,     
+        i_issmsverified IN VARCHAR2,                    
+        i_emailverificationcode IN VARCHAR2,
+        i_smsverificationcode IN VARCHAR2,   
+        i_passwordrecoverycode IN VARCHAR2,  
+        i_action IN NUMBER,
+        result out NUMBER
+          
+                
+    )
+    AS
+      var_temp NUMBER;
+      out_custId number;
+      
+      
+      out_unitprice NUMBER;
+      newRId number;
+      tranID NUMBER;
+      
+    
+
+  
+    BEGIN
+         out_custId := 0;
+         var_temp:=1;
+         result:=109;
+         
+         select NVL(MAX(ID), 0) into out_custId from CUSTOMERPROFILE; 
+         
+         
+         IF(i_action=1) THEN
+         
+          out_custId := out_custId + 1;
+          
+          insert into CUSTOMERPROFILE(ID,USERNAME,PASSWORD,NAME,GENDER,DOB,EMAIL,MOBILE,PROFILE_EXTRA,IS_EMAIL_VERIFIED,IS_SMS_VERIFIED,EMAIL_VERIFICATION_CODE,SMS_VERIFICATION_CODE,PASSWORD_RECOVERY_CODE,CREATED_BY,CREATED_AT)
+                            values(out_custId,i_loginusername,i_loginpassword,i_name,i_gender,to_date(i_dob, 'dd/mm/yyyy'),i_email,i_mobile,i_profileextra,i_isemailverified,i_issmsverified,i_emailverificationcode,i_smsverificationcode,i_passwordrecoverycode,i_loginusername,sysdate);
+          
+         result:=101;            
+         
+       --  ELSE IF(i_action=2) THEN 
+         
+         --ELSE IF(i_action=3) THEN
+         
+        -- ELSE IF(i_action=4) THEN
+         
+         ELSE
+         
+            result:=109;
+            
+         END IF;
+         
+      
+         
+     EXCEPTION
+       WHEN OTHERS THEN
+       result :=101;
+       -- Consider logging the error and then re-raise
+     --  RAISE;
+     rollback;
+      
+    END InsertCustomerProfile;
+    
+ 
+PROCEDURE UpdateCustomerProfile
+    (
+        i_loginusername IN VARCHAR2,                 
+        i_loginpassword IN VARCHAR2,                 
+        i_name IN VARCHAR2,                     
+        i_gender IN VARCHAR2,                  
+        i_dob IN VARCHAR2,                    
+        i_email IN VARCHAR2,                  
+        i_mobile IN VARCHAR2,                   
+        i_profileextra IN VARCHAR2 ,           
+        i_isemailverified IN VARCHAR2,     
+        i_issmsverified IN VARCHAR2,                    
+        i_emailverificationcode IN VARCHAR2,
+        i_smsverificationcode IN VARCHAR2,   
+        i_passwordrecoverycode IN VARCHAR2,  
+        i_action IN NUMBER,
+        result out NUMBER
+          
+                
+    )
+    AS
+      var_temp NUMBER;
+      out_custId number;
+      newRId number;
+      tranID NUMBER;
+      
+    
+
+  
+    BEGIN
+         out_custId := 0;
+         var_temp:=1;
+         result:=109;
+         
+        -- select MAX(ID) into out_custId from CUSTOMERPROFILE; 
+         
+         
+         IF(i_action=2) THEN
+         
+         -- out_custId := out_custId + 1;
+          
+          update CUSTOMERPROFILE set USERNAME=i_loginusername,PASSWORD=i_loginpassword,NAME=i_name,GENDER=i_gender,DOB=to_date(i_dob, 'dd/mm/yyyy'),
+EMAIL=i_email,MOBILE=i_mobile,PROFILE_EXTRA=i_profileextra,IS_EMAIL_VERIFIED=i_isemailverified,IS_SMS_VERIFIED=i_issmsverified,EMAIL_VERIFICATION_CODE=i_emailverificationcode,SMS_VERIFICATION_CODE=i_smsverificationcode,
+PASSWORD_RECOVERY_CODE=i_passwordrecoverycode,UPDATED_BY=i_loginusername,UPDATED_AT=sysdate  where USERNAME=i_loginusername;
+          
+         result:=102;            
+         
+       --  ELSE IF(i_action=2) THEN 
+         
+         --ELSE IF(i_action=3) THEN
+         
+        -- ELSE IF(i_action=4) THEN
+         
+         ELSE
+         
+            result:=109;
+            
+         END IF;
+         
+      
+         
+     EXCEPTION
+       WHEN OTHERS THEN
+       result :=101;
+       -- Consider logging the error and then re-raise
+     --  RAISE;
+     rollback;
+      
+    END UpdateCustomerProfile;   
+
+PROCEDURE SelectCustomerProfile
+    (
+        i_loginusername IN VARCHAR2,                 
+        i_action IN NUMBER,
+        result out NUMBER,
+        p_cursor OUT SYS_REFCURSOR 
+    )
+    AS
+      var_temp NUMBER;
+      out_custId number;
+      
+    BEGIN
+         out_custId := 0;
+         var_temp:=1;
+         result:=109;
+         
+         --select MAX(ID) into out_custId from CUSTOMERPROFILE; 
+         
+         
+         IF(i_action=3) THEN
+         
+          OPEN p_cursor FOR  
+          
+          select USERNAME as Uname,PASSWORD as pass,NAME as name,GENDER as gender ,DOB as dob,EMAIL as email,MOBILE as  mobile,PROFILE_EXTRA as profExtra,IS_EMAIL_VERIFIED as emailVari,IS_SMS_VERIFIED as smsVari,EMAIL_VERIFICATION_CODE as evCode,
+          SMS_VERIFICATION_CODE as svCode,PASSWORD_RECOVERY_CODE as prCode from
+          CUSTOMERPROFILE where USERNAME=i_loginusername;
+          
+          result:=103;            
+         
+              
+         ELSE
+         
+            result:=109;
+            
+         END IF;
+         
+      
+         
+     EXCEPTION
+       WHEN OTHERS THEN
+       result :=101;
+       -- Consider logging the error and then re-raise
+     --  RAISE;
+     rollback;
+      
+    END SelectCustomerProfile;
+    
+    
+END PKG_CUSTOMER_PROFILE; 
+
+
+
+
+create or replace PACKAGE BODY             PKG_TICKE_PURCHAGE
+AS
+   PROCEDURE InsertConcessionBookingData (i_itemcode       IN     NUMBER,
+                                          i_noofitems      IN     NUMBER,
+                                          i_totalamount    IN     NUMBER,
+                                          i_mobilenumber   IN     VARCHAR2,
+                                          i_showdate       IN     VARCHAR2,
+                                          i_customername   IN     VARCHAR2,
+                                          i_agentname      IN     VARCHAR2,
+                                          result              OUT NUMBER)
+   AS
+      var_temp           NUMBER;
+      out_unitprice      NUMBER;
+      total_price        NUMBER;
+      newRId             NUMBER;
+      tranID             NUMBER;
+      out_transId        NUMBER;
+      cin_ticketnumber   NUMBER;
+      cin_ticketseqid    NUMBER;
+      cin_boxofficeid    NUMBER;
+      cin_rownum         NUMBER;
+      cin_columnnum      NUMBER;
+      cin_seatnum        VARCHAR2 (100);
+      out_showdate       VARCHAR2 (30);
+   BEGIN
+      out_transId := 0;
+      out_unitprice := 0;
+      var_temp := 1;
+      result := 101;
+      out_showdate := '';
+
+
+
+      SELECT   TO_CHAR (SYSDATE, 'mmddyyyyhhmiss') INTO out_transId FROM DUAL;
+
+      SELECT   UNITCOST
+        INTO   out_unitprice
+        FROM   PRODUCTS@ticketlink
+       WHERE   ITEMCODE = i_itemcode;
+
+
+      IF (LENGTH (out_transId) > 0)
+      THEN
+         out_transId := out_transId + 1;
+         total_price := out_unitprice * i_noofitems;
+
+
+
+         FOR i IN 1 .. i_noofitems
+         LOOP
+            IF (var_temp = 1)
+            THEN
+               INSERT INTO ONLINECONCESSIONMASTERLOG@ticketlink (
+                                                                    onlinetransid,
+                                                                    onlinetrasdate,
+                                                                    ONLINECONCESSIONQTY,
+                                                                    onlineamttendered,
+                                                                    status,
+                                                                    mobileno,
+                                                                    showdate,
+                                                                    IS_BOOKED,
+                                                                    customer_name,
+                                                                    insertedby,
+                                                                    inserteddate
+                          )
+                 VALUES   (out_transId,
+                           SYSDATE,
+                           i_noofitems,
+                           total_price,
+                           '0',
+                           i_mobilenumber,
+                           TO_DATE (i_showdate, 'dd/mm/yyyy'),
+                           'Y',
+                           i_customername,
+                           i_agentname,
+                           SYSDATE);
+            END IF;
+
+            IF (var_temp <= i_noofitems)
+            THEN
+               INSERT INTO ONLINECONCESSIONDETAILSLOG@ticketlink (
+                                                                     onlinetransid,
+                                                                     ONLINECONCESSIONID,
+                                                                     onlinecost,
+                                                                     status,
+                                                                     insertedby,
+                                                                     inserteddate
+                          )
+                 VALUES   (out_transId,
+                           i_itemcode,
+                           out_unitprice,
+                           '0',
+                           i_agentname,
+                           SYSDATE);
+            END IF;
+
+            var_temp := var_temp + 1;
+         END LOOP;
+
+         result := out_transId;
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         result := 101;
+         -- Consider logging the error and then re-raise
+         --  RAISE;
+         ROLLBACK;
+   END InsertConcessionBookingData;
+
+   PROCEDURE InsertTransactionData (i_programid      IN     NUMBER,
+                                    i_nooftickets    IN     NUMBER,
+                                    i_totalamount    IN     NUMBER,
+                                    i_mobilenumber   IN     VARCHAR2,
+                                    i_seattype       IN     NUMBER,
+                                    i_showdate       IN     VARCHAR2,
+                                    i_customername   IN     VARCHAR2,
+                                    result              OUT NUMBER)
+   AS
+      var_temp           NUMBER;
+      out_unitprice      NUMBER;
+      newRId             NUMBER;
+      tranID             NUMBER;
+      out_transId        NUMBER;
+      cin_ticketnumber   NUMBER;
+      cin_ticketseqid    NUMBER;
+      cin_SEATSEQID      NUMBER;
+      cin_boxofficeid    NUMBER;
+      cin_rownum         NUMBER;
+      cin_columnnum      NUMBER;
+      cin_seatnum        VARCHAR2 (100);
+
+
+      CURSOR auth_trx
+      IS
+           SELECT   tb.ticketnumber,
+                    tb.ticketseqid,
+                    SP.SEATSEQID,
+                    sp.boxofficeid,
+                    sp.rowno,
+                    sp.columnid,
+                    sp.seatnum
+             FROM   ticketbook@ticketlink tb, seatplan@ticketlink sp --, ONLINESALEDETAILSLOG@ticketlink dlog
+            WHERE       sp.seatseqid = tb.ticketseqid
+                    AND sp.classheirarchey = i_seattype
+                    AND sp.IsOnLine = 'Y'
+                    AND tb.Status = 'B'
+                    AND tb.programid = i_programid
+                    AND tb.ticketnumber NOT IN
+                             (SELECT   ONLINETICKETID
+                                FROM   ONLINESALEDETAILSLOG@ticketlink
+                               WHERE   is_booked = 'Y')
+         ORDER BY   SP.SEATSEQID;
+   BEGIN
+      out_transId := 0;
+      out_unitprice := 0;
+      var_temp := 1;
+      result := 101;
+
+      IF (i_nooftickets > 4)
+      THEN
+         result := 104;
+      ELSE
+         SELECT   MAX (onlinetransId)
+           INTO   out_transId
+           FROM   onlinesalemaster@ticketlink;
+
+         SELECT   TicketUnitPrice
+           INTO   out_unitprice
+           FROM   vw_ticketprice@ticketlink
+          WHERE   PROGRAMID = i_programid AND CLASSHEIRARCHEY = i_seattype;
+
+
+
+         IF (out_transId > 0)
+         THEN
+            out_transId := out_transId + 1;
+
+            OPEN auth_trx;
+
+            LOOP
+               FETCH auth_trx
+                  INTO
+                            cin_ticketnumber, cin_ticketseqid, cin_SEATSEQID, cin_boxofficeid, cin_rownum, cin_columnnum, cin_seatnum;
+
+               EXIT WHEN auth_trx%NOTFOUND;
+
+               IF (var_temp = 1)
+               THEN
+                  INSERT INTO onlinesalemaster@ticketlink (onlinetransid,
+                                                           onlinetrasdate,
+                                                           onlineticketqty,
+                                                           onlineamttendered,
+                                                           status,
+                                                           insertedby,
+                                                           inserteddate,
+                                                           programid,
+                                                           showdate,
+                                                           mobileno)
+                    VALUES   (out_transId,
+                              SYSDATE,
+                              i_nooftickets,
+                              i_totalamount,
+                              '0',
+                              i_customername,
+                              SYSDATE,
+                              i_programid,
+                              TO_DATE (i_showdate, 'dd/mm/yyyy'),
+                              i_mobilenumber);
+               END IF;
+
+               IF (var_temp <= i_nooftickets)
+               THEN
+                  INSERT INTO ONLINESALEDETAILS@ticketlink (onlinetransid,
+                                                            onlineticketid,
+                                                            onlinecost,
+                                                            status,
+                                                            insertedby,
+                                                            inserteddate)
+                    VALUES   (out_transId,
+                              cin_ticketnumber,
+                              out_unitprice,
+                              '0',
+                              i_customername,
+                              SYSDATE);
+
+                  UPDATE   ticketbook@ticketlink
+                     SET   Status = 'S'
+                   WHERE       TICKETNUMBER = cin_ticketnumber
+                           AND PROGRAMID = i_programId
+                           AND TICKETSEQID = cin_ticketseqid;
+               END IF;
+
+               var_temp := var_temp + 1;
+            END LOOP;
+
+            CLOSE auth_trx;
+
+
+
+            result := out_transId;
+         ELSE
+            result := 101;
+         END IF;
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         result := 101;
+         -- Consider logging the error and then re-raise
+         --  RAISE;
+         ROLLBACK;
+   END InsertTransactionData;
+
+
+   PROCEDURE InsertBookingData_Bak (i_programid      IN     NUMBER,
+                                    i_nooftickets    IN     NUMBER,
+                                    i_totalamount    IN     NUMBER,
+                                    i_mobilenumber   IN     VARCHAR2,
+                                    i_seattype       IN     NUMBER,
+                                    i_showdate       IN     VARCHAR2,
+                                    i_customername   IN     VARCHAR2,
+                                    i_agentname      IN     VARCHAR2,
+                                    result              OUT NUMBER)
+   AS
+      var_temp                NUMBER;
+      out_unitprice           NUMBER;
+      total_price             NUMBER;
+      noofavailable_tickets   NUMBER;
+      newRId                  NUMBER;
+      tranID                  NUMBER;
+      out_transId             NUMBER;
+      cin_ticketnumber        NUMBER;
+      cin_ticketseqid         NUMBER;
+      cin_SEATSEQID           NUMBER;
+      cin_boxofficeid         NUMBER;
+      cin_rownum              NUMBER;
+      cin_columnnum           NUMBER;
+      cin_seatnum             VARCHAR2 (100);
+
+
+      CURSOR auth_trx
+      IS
+           SELECT   tb.ticketnumber,
+                    tb.ticketseqid,
+                    SP.SEATSEQID,
+                    sp.boxofficeid,
+                    sp.rowno,
+                    sp.columnid,
+                    sp.seatnum
+             FROM   ticketbook@ticketlink tb, seatplan@ticketlink sp
+            WHERE       sp.seatseqid = tb.ticketseqid
+                    AND sp.classheirarchey = i_seattype
+                    AND sp.IsOnLine = 'Y'
+                    AND tb.Status = 'B'
+                    AND tb.ticketnumber NOT IN
+                             (SELECT   ONLINETICKETID
+                                FROM   ONLINESALEDETAILSLOG@ticketlink
+                               WHERE   is_booked = 'Y')
+                    AND tb.programid = i_programid
+         ORDER BY   SP.rowno, sp.columnid;
+   BEGIN
+      out_transId := 0;
+      out_unitprice := 0;
+      var_temp := 1;
+      result := 101;
+      noofavailable_tickets := 0;
+
+      IF (i_nooftickets > 4)
+      THEN
+         result := 104;
+      ELSE
+           SELECT   COUNT (ticketnumber)
+             INTO   noofavailable_tickets
+             FROM   ticketbook@ticketlink tb, seatplan@ticketlink sp
+            WHERE       sp.seatseqid = tb.ticketseqid
+                    AND sp.classheirarchey = i_seattype
+                    AND sp.IsOnLine = 'Y'
+                    AND tb.Status = 'B'
+                    AND tb.ticketnumber NOT IN
+                             (SELECT   ONLINETICKETID
+                                FROM   ONLINESALEDETAILSLOG@ticketlink
+                               WHERE   is_booked = 'Y')
+                    AND tb.programid = i_programid
+         ORDER BY   SP.rowno, sp.columnid;
+
+         IF (i_nooftickets > noofavailable_tickets)
+         THEN
+            result := 105;
+         ELSE
+            SELECT   TO_CHAR (SYSDATE, 'mmddyyyyhhmiss')
+              INTO   out_transId
+              FROM   DUAL;
+
+            SELECT   TicketUnitPrice
+              INTO   out_unitprice
+              FROM   vw_ticketprice@ticketlink
+             WHERE   PROGRAMID = i_programid AND CLASSHEIRARCHEY = i_seattype;
+
+
+
+            IF (out_transId > 0)
+            THEN
+               out_transId := out_transId + 1;
+               total_price := out_unitprice * i_nooftickets;
+
+
+
+               OPEN auth_trx;
+
+               LOOP
+                  FETCH auth_trx
+                     INTO
+                               cin_ticketnumber, cin_ticketseqid, cin_SEATSEQID, cin_boxofficeid, cin_rownum, cin_columnnum, cin_seatnum;
+
+                  EXIT WHEN auth_trx%NOTFOUND;
+
+                  IF (var_temp = 1)
+                  THEN
+                     INSERT INTO onlinesalemasterlog@ticketlink (
+                                                                    onlinetransid,
+                                                                    onlinetrasdate,
+                                                                    onlineticketqty,
+                                                                    onlineamttendered,
+                                                                    status,
+                                                                    insertedby,
+                                                                    inserteddate,
+                                                                    programid,
+                                                                    showdate,
+                                                                    mobileno,
+                                                                    customer_name,
+                                                                    seat_type
+                                )
+                       VALUES   (out_transId,
+                                 SYSDATE,
+                                 i_nooftickets,
+                                 total_price,
+                                 '0',
+                                 i_agentname,
+                                 SYSDATE,
+                                 i_programid,
+                                 TO_DATE (i_showdate, 'dd/mm/yyyy'),
+                                 i_mobilenumber,
+                                 i_customername,
+                                 i_seattype);
+                  END IF;
+
+                  IF (var_temp <= i_nooftickets)
+                  THEN
+                     INSERT INTO ONLINESALEDETAILSLOG@ticketlink (
+                                                                     onlinetransid,
+                                                                     onlineticketid,
+                                                                     onlinecost,
+                                                                     status,
+                                                                     insertedby,
+                                                                     inserteddate
+                                )
+                       VALUES   (out_transId,
+                                 cin_ticketnumber,
+                                 out_unitprice,
+                                 '0',
+                                 i_agentname,
+                                 SYSDATE);
+                  --  UPDATE ticketbook@ticketlink SET    Status='S' WHERE TICKETNUMBER=cin_ticketnumber AND PROGRAMID=i_programId AND TICKETSEQID=cin_ticketseqid;
+
+                  END IF;
+
+                  var_temp := var_temp + 1;
+               END LOOP;
+
+               CLOSE auth_trx;
+
+
+
+               result := out_transId;
+            ELSE
+               result := 101;
+            END IF;
+         END IF;
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         result := 101;
+         -- Consider logging the error and then re-raise
+         --  RAISE;
+         ROLLBACK;
+   END InsertBookingData_Bak;
+
+   PROCEDURE InsertBookingData (i_programid      IN     NUMBER,
+                                i_featureid      IN     NUMBER,
+                                i_nooftickets    IN     NUMBER,
+                                i_totalamount    IN     NUMBER,
+                                i_mobilenumber   IN     VARCHAR2,
+                                i_seattype       IN     NUMBER,
+                                i_showdate       IN     VARCHAR2,
+                                i_customername   IN     VARCHAR2,
+                                i_agentname      IN     VARCHAR2,
+                                result              OUT NUMBER)
+   AS
+      var_temp                NUMBER;
+      out_unitprice           NUMBER;
+      total_price             NUMBER;
+      noofavailable_tickets   NUMBER;
+      newRId                  NUMBER;
+      tranID                  NUMBER;
+      out_transId             NUMBER;
+      cin_ticketnumber        NUMBER;
+      cin_ticketseqid         NUMBER;
+      cin_SEATSEQID           NUMBER;
+      cin_boxofficeid         NUMBER;
+      cin_rownum              NUMBER;
+      cin_columnnum           NUMBER;
+      cin_seatnum             VARCHAR2 (100);
+      out_showdate            VARCHAR2 (30);
+      -- USED FRO SEQUENTIAL TICKET CHECKING
+      i                       NUMBER := 0;
+      firstRow                NUMBER (5);
+      firstCol                NUMBER (5);
+      seatRow                 VARCHAR2 (5);
+      seatNo                  NUMBER (5);
+      partSql                 VARCHAR2 (100);
+      tick_array              DBMS_SQL.varchar2_table;
+   /* CURSOR auth_trx IS
+    SELECT  tb.ticketnumber,tb.ticketseqid,SP.SEATSEQID ,sp.boxofficeid,sp.rowno,sp.columnid,sp.seatnum
+            from ticketbook@ticketlink tb, seatplan@ticketlink sp
+            where sp.seatseqid = tb.ticketseqid
+            and sp.classheirarchey = i_seattype
+            AND sp.IsOnLine='Y' AND tb.Status='B'
+            and tb.ticketnumber not in (select ONLINETICKETID from ONLINESALEDETAILSLOG@ticketlink where is_booked='Y')
+            and tb.programid= i_programid order by SP.rowno,sp.columnid ;*/
+
+
+   BEGIN
+      --CHECKING FOR SEQUENTIAL TICKET
+
+      FOR j IN 0 .. i_nooftickets - 1
+      LOOP
+         tick_array (j) := '';
+      END LOOP;
+
+      FOR rec1
+      IN (  SELECT   SUBSTR (sp.seatnum, 1, 1) SEATSEQ,
+                     COUNT (tb.ticketnumber) AS SEATFREE
+              FROM   ticketbook@ticketlink tb, seatplan@ticketlink sp
+             WHERE       sp.seatseqid = tb.ticketseqid
+                     AND sp.classheirarchey = i_seattype
+                     AND sp.IsOnLine = 'Y'
+                     AND tb.Status = 'B'
+                     AND tb.ticketnumber NOT IN
+                              (SELECT   ONLINETICKETID
+                                 FROM   ONLINESALEDETAILSLOG@ticketlink
+                                WHERE   is_booked = 'Y')
+                     --order by SP.rowno,sp.columnid
+                     AND tb.programid = i_programid
+          GROUP BY   SUBSTR (sp.seatnum, 1, 1)
+          ORDER BY   SUBSTR (sp.seatnum, 1, 1))
+      LOOP
+         seatRow := rec1.SEATSEQ;
+         seatNo := rec1.SEATFREE;
+
+         IF (seatNo < i_nooftickets)
+         THEN
+            FOR rec
+            IN (  SELECT   tb.ticketnumber,
+                           tb.ticketseqid,
+                           SP.SEATSEQID,
+                           sp.boxofficeid,
+                           sp.rowno,
+                           sp.columnid,
+                           sp.seatnum
+                    FROM   ticketbook@ticketlink tb, seatplan@ticketlink sp
+                   WHERE       sp.seatseqid = tb.ticketseqid
+                           AND sp.classheirarchey = i_seattype
+                           AND sp.IsOnLine = 'Y'
+                           AND tb.Status = 'B'
+                           AND SUBSTR (sp.seatnum, 0, 1) != seatRow
+                           AND tb.ticketnumber NOT IN
+                                    (SELECT   ONLINETICKETID
+                                       FROM   ONLINESALEDETAILSLOG@ticketlink
+                                      WHERE   is_booked = 'Y')
+                           AND tb.programid = i_programid
+                ORDER BY   SP.rowno, sp.columnid)
+            LOOP
+               i := i + 1;
+
+               IF (i <= i_nooftickets)
+               THEN
+                  IF (i = 1)
+                  THEN
+                     firstRow := rec.rowno;
+                     firstCol := rec.columnid;
+                  END IF;
+
+                  IF (firstRow <> rec.rowno)
+                  THEN
+                     result := 106;
+                     RETURN;
+                  END IF;
+
+                  IF (i = 1)
+                  THEN
+                     tick_array (0) := rec.ticketnumber;
+                  ELSE
+                     firstCol := firstCol + 1;
+
+                     IF (firstCol <> rec.columnid)
+                     THEN
+                        firstCol := rec.columnid;
+                        firstRow := rec.rowno;
+                        tick_array (0) := rec.ticketnumber;
+                        i := 1;
+                     ELSE
+                        tick_array (i - 1) := rec.ticketnumber;
+                     END IF;
+                  END IF;
+               END IF;
+            END LOOP;
+
+            IF (tick_array (i_nooftickets - 1) IS NULL
+                OR tick_array (i_nooftickets - 1) = '')
+            THEN
+               result := 106;
+               RETURN;
+            ELSE
+               EXIT;
+            END IF;
+         ELSE
+         
+          FOR rec
+            IN (  SELECT   tb.ticketnumber,
+                           tb.ticketseqid,
+                           SP.SEATSEQID,
+                           sp.boxofficeid,
+                           sp.rowno,
+                           sp.columnid,
+                           sp.seatnum
+                    FROM   ticketbook@ticketlink tb, seatplan@ticketlink sp
+                   WHERE       sp.seatseqid = tb.ticketseqid
+                           AND sp.classheirarchey = i_seattype
+                           AND sp.IsOnLine = 'Y'
+                           AND tb.Status = 'B'
+                          -- AND SUBSTR (sp.seatnum, 0, 1) != seatRow
+                           AND tb.ticketnumber NOT IN
+                                    (SELECT   ONLINETICKETID
+                                       FROM   ONLINESALEDETAILSLOG@ticketlink
+                                      WHERE   is_booked = 'Y')
+                           AND tb.programid = i_programid
+                ORDER BY   SP.rowno, sp.columnid)
+            LOOP
+               i := i + 1;
+
+               IF (i <= i_nooftickets)
+               THEN
+                  IF (i = 1)
+                  THEN
+                     firstRow := rec.rowno;
+                     firstCol := rec.columnid;
+                  END IF;
+
+                  IF (firstRow <> rec.rowno)
+                  THEN
+                     result := 106;
+                     RETURN;
+                  END IF;
+
+                  IF (i = 1)
+                  THEN
+                     tick_array (0) := rec.ticketnumber;
+                  ELSE
+                     firstCol := firstCol + 1;
+
+                     IF (firstCol <> rec.columnid)
+                     THEN
+                        firstCol := rec.columnid;
+                        firstRow := rec.rowno;
+                        tick_array (0) := rec.ticketnumber;
+                        i := 1;
+                     ELSE
+                        tick_array (i - 1) := rec.ticketnumber;
+                     END IF;
+                  END IF;
+               END IF;
+            END LOOP;
+
+            IF (tick_array (i_nooftickets - 1) IS NULL
+                OR tick_array (i_nooftickets - 1) = '')
+            THEN
+               result := 106;
+               RETURN;
+            ELSE
+               EXIT;
+            END IF;
+         
+         END IF;
+      -- EXIT WHEN tick_array(i_nooftickets-1) IS NOT NULL;
+
+      END LOOP rec1;
+
+      --END CHECKING FOR SEQUENTIAL TICKET
+      out_transId := 0;
+      out_unitprice := 0;
+      var_temp := 1;
+      result := 101;
+      noofavailable_tickets := 0;
+      out_showdate := '';
+
+      IF (i_nooftickets > 4)
+      THEN
+         result := 104;
+      ELSE
+           SELECT   COUNT (ticketnumber)
+             INTO   noofavailable_tickets
+             FROM   ticketbook@ticketlink tb, seatplan@ticketlink sp
+            WHERE       sp.seatseqid = tb.ticketseqid
+                    AND sp.classheirarchey = i_seattype
+                    AND sp.IsOnLine = 'Y'
+                    AND tb.Status = 'B'
+                    AND tb.ticketnumber NOT IN
+                             (SELECT   ONLINETICKETID
+                                FROM   ONLINESALEDETAILSLOG@ticketlink
+                               WHERE   is_booked = 'Y')
+                    AND tb.programid = i_programid
+         ORDER BY   SP.rowno, sp.columnid;
+
+         IF (i_nooftickets > noofavailable_tickets)
+         THEN
+            result := 105;
+         ELSE
+            SELECT   TO_CHAR (SYSDATE, 'mmddyyyyhhmiss')
+              INTO   out_transId
+              FROM   DUAL;
+
+            SELECT   TicketUnitPrice
+              INTO   out_unitprice
+              FROM   vw_ticketprice@ticketlink
+             WHERE   PROGRAMID = i_programid AND CLASSHEIRARCHEY = i_seattype;
+
+            SELECT   TO_CHAR (showdate, 'dd/mm/yyyy')
+              INTO   out_showdate
+              FROM   programedfilm@ticketlink
+             WHERE   programid = i_programid AND featureid = i_featureid;
+
+            IF (TO_DATE (out_showdate, 'dd/mm/yyyy') <>
+                   TO_DATE (i_showdate, 'dd/mm/yyyy'))
+            THEN
+               result := 101;
+               RETURN;
+            END IF;
+
+
+
+            IF (out_transId > 0)
+            THEN
+               out_transId := out_transId + 1;
+               total_price := out_unitprice * i_nooftickets;
+
+
+
+               FOR i IN tick_array.FIRST .. tick_array.LAST
+               LOOP
+                  IF (tick_array (i) IS NULL OR tick_array (i) = '')
+                  THEN
+                     result := 106;
+                     ROLLBACK;
+                     RETURN;
+                  END IF;
+
+
+                  IF (var_temp = 1)
+                  THEN
+                     INSERT INTO onlinesalemasterlog@ticketlink (
+                                                                    onlinetransid,
+                                                                    onlinetrasdate,
+                                                                    onlineticketqty,
+                                                                    onlineamttendered,
+                                                                    status,
+                                                                    insertedby,
+                                                                    inserteddate,
+                                                                    programid,
+                                                                    showdate,
+                                                                    mobileno,
+                                                                    customer_name,
+                                                                    seat_type
+                                )
+                       VALUES   (out_transId,
+                                 SYSDATE,
+                                 i_nooftickets,
+                                 total_price,
+                                 '0',
+                                 i_agentname,
+                                 SYSDATE,
+                                 i_programid,
+                                 TO_DATE (i_showdate, 'dd/mm/yyyy'),
+                                 i_mobilenumber,
+                                 i_customername,
+                                 i_seattype);
+                  END IF;
+
+                  IF (var_temp <= i_nooftickets)
+                  THEN
+                     INSERT INTO ONLINESALEDETAILSLOG@ticketlink (
+                                                                     onlinetransid,
+                                                                     onlineticketid,
+                                                                     onlinecost,
+                                                                     status,
+                                                                     insertedby,
+                                                                     inserteddate
+                                )
+                       VALUES   (out_transId,
+                                 tick_array (i),
+                                 out_unitprice,
+                                 '0',
+                                 i_agentname,
+                                 SYSDATE);
+                  --  UPDATE ticketbook@ticketlink SET    Status='S' WHERE TICKETNUMBER=cin_ticketnumber AND PROGRAMID=i_programId AND TICKETSEQID=cin_ticketseqid;
+
+                  END IF;
+
+                  var_temp := var_temp + 1;
+               END LOOP;
+
+               result := out_transId;
+            ELSE
+               result := 101;
+            END IF;
+         END IF;
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         result := 101;
+         -- Consider logging the error and then re-raise
+         --  RAISE;
+         ROLLBACK;
+   END InsertBookingData;
+
+   PROCEDURE confirmConcessionTransData (i_trancode        IN     VARCHAR2,
+                                         i_concessionamt   IN     VARCHAR2,
+                                         result               OUT NUMBER)
+   AS
+      var_temp            NUMBER;
+      out_unitprice       NUMBER;
+      newRId              NUMBER;
+      tranID              NUMBER;
+      out_transId         NUMBER;
+      out_temptransId     NUMBER;
+      out_maxdate         NUMBER;
+      out_today           NUMBER;
+      out_transBid        NUMBER;
+      cin_onlinetransid   VARCHAR2 (100);
+      cin_itemcode        NUMBER;
+      cin_quty            NUMBER;
+      cin_unitcost        NUMBER;
+      cin_totalcost       NUMBER;
+      cin_onlinecost      NUMBER;
+      cin_refid           VARCHAR2 (100);
+      cin_insertedby      VARCHAR2 (100);
+      cin_inserteddate    VARCHAR2 (100);
+      cin_updatedby       VARCHAR2 (100);
+      cin_updateddate     VARCHAR2 (100);
+      cin_status          VARCHAR2 (100);
+      cin_itemamt         NUMBER;
+
+
+      CURSOR book_trx
+      IS
+         SELECT   onlinetransid,
+                  ONLINECONCESSIONID,
+                  onlinecost,
+                  status,
+                  insertedby,
+                  inserteddate
+           FROM   ONLINECONCESSIONDETAILSLOG@ticketlink
+          WHERE   onlinetransid = i_trancode AND is_booked = 'Y';
+   BEGIN
+      out_temptransId := 0;
+      out_transBid := 0;
+      out_transId := 0;
+      out_maxdate := 0;
+      out_today := 0;
+      cin_itemamt := 0;
+      var_temp := 1;
+      result := 101;
+
+      --TRANSACTION AMOUNT VERIFICATION
+
+      SELECT   SUM (onlinecost)
+        INTO   cin_itemamt
+        FROM   ONLINECONCESSIONDETAILSLOG@ticketlink
+       WHERE   onlinetransId = i_trancode;
+
+
+
+      IF (TO_NUMBER (i_concessionamt) <> cin_itemamt)
+      THEN
+         UPDATE   ONLINECONCESSIONMASTERLOG@ticketlink
+            SET   is_booked = 'N',
+                  updatedby = 'system',
+                  updateddate = SYSDATE,
+                  Remarks = '106:Amount Does Not Matched'
+          WHERE   onlinetransid = i_trancode;
+
+         UPDATE   ONLINECONCESSIONDETAILSLOG@ticketlink
+            SET   is_booked = 'N',
+                  updatedby = 'system',
+                  updateddate = SYSDATE
+          WHERE   onlinetransid = i_trancode;
+
+         result := 106;
+         RETURN;
+      END IF;
+
+
+      SELECT   COUNT (onlinetransId)
+        INTO   out_temptransId
+        FROM   ONLINECONCESSIONMASTERLOG@ticketlink
+       WHERE   onlinetransId = i_trancode;
+
+
+
+      IF (out_temptransId > 0)
+      THEN
+         -- ONLINE SALE BOOKED TICKET RELEASED OR NOT
+         SELECT   COUNT (onlinetransId)
+           INTO   out_transBid
+           FROM   ONLINECONCESSIONMASTERLOG@ticketlink
+          WHERE   onlinetransId = i_trancode AND is_booked = 'Y';
+
+
+         IF (out_transBid > 0)
+         THEN
+            SELECT   MAX (onlinetransId)
+              INTO   out_transId
+              FROM   ONLINESALEVOUCHERMASTER@ticketlink;
+
+            SELECT   SUBSTR (out_transId, -12, 7) INTO out_maxdate FROM DUAL;
+
+            SELECT   SUBSTR (
+                        (SELECT   (SELECT   REGEXP_REPLACE (
+                                               (SELECT   TO_CHAR (SYSDATE,
+                                                                  'yyyymmdd')
+                                                  FROM   DUAL),
+                                               '(^.{1})(.{1})(.*)$',
+                                               '\1\3'
+                                            )
+                                     FROM   DUAL)
+                           FROM   DUAL),
+                        -7,
+                        7
+                     )
+              INTO   out_today
+              FROM   DUAL;
+
+
+
+            IF (out_maxdate <> out_today)
+            THEN
+               SELECT   CONCAT (
+                           (SELECT   REGEXP_REPLACE (
+                                        (SELECT   TO_CHAR (SYSDATE,
+                                                           'yyyymmdd')
+                                           FROM   DUAL),
+                                        '(^.{1})(.{1})(.*)$',
+                                        '\1\3'
+                                     )
+                              FROM   DUAL),
+                           '00001'
+                        )
+                 INTO   out_transId
+                 FROM   DUAL;
+            ELSE
+               out_transId := out_transId + 1;
+            END IF;
+
+
+
+            IF (LENGTH (out_transId) > 0)
+            THEN
+               INSERT INTO ONLINESALEVOUCHERMASTER@ticketlink (ONLINETRANSID,
+                                                               ONLINETRANSDATE,
+                                                               TOTALCOST,
+                                                               TOTALITEM,
+                                                               AMTTENDERED,
+                                                               ONLINESALETYPE,
+                                                               STATUS,
+                                                               MOBILENO,
+                                                               INSERTEDBY,
+                                                               INSERTEDDATE)
+                  SELECT   out_transId,
+                           b.ONLINETRASDATE,
+                           b.ONLINEAMTTENDERED,
+                           b.ONLINECONCESSIONQTY,
+                           b.ONLINEAMTTENDERED,
+                           'C',
+                           b.status,
+                           b.mobileno,
+                           b.insertedby,
+                           b.inserteddate
+                    FROM   ONLINECONCESSIONMASTERLOG@ticketlink b
+                   WHERE   b.onlinetransid = i_trancode AND b.is_booked = 'Y';
+
+               UPDATE   ONLINECONCESSIONMASTERLOG@ticketlink
+                  SET   is_booked = 'S', TRASACTION_ID = out_transId
+                WHERE   onlinetransid = i_trancode;
+
+               SELECT   COUNT (onlinecost)
+                 INTO   cin_quty
+                 FROM   ONLINECONCESSIONDETAILSLOG@ticketlink
+                WHERE   onlinetransId = i_trancode;
+
+               SELECT   DISTINCT (ONLINECOST)
+                 INTO   cin_unitcost
+                 FROM   ONLINECONCESSIONDETAILSLOG@ticketlink
+                WHERE   onlinetransId = i_trancode;
+
+               OPEN book_trx;
+
+               LOOP
+                  FETCH book_trx
+                     INTO
+                               cin_onlinetransid, cin_itemcode, cin_onlinecost, cin_status, cin_insertedby, cin_inserteddate;
+
+                  EXIT WHEN book_trx%NOTFOUND;
+
+
+
+                  INSERT INTO ONLINESALEVOUCHERDETAILS@ticketlink (
+                                                                      onlinetransid,
+                                                                      ITEMCODE,
+                                                                      QNTY,
+                                                                      UNITCOST,
+                                                                      TOTALCOST,
+                                                                      insertedby,
+                                                                      inserteddate,
+                                                                      UPDATEDBY,
+                                                                      UPDATEDDATE,
+                                                                      REFERENCEID
+                             )
+                    VALUES   (out_transId,
+                              cin_itemcode,
+                              cin_quty,
+                              cin_unitcost,
+                              cin_itemamt,
+                              cin_insertedby,
+                              cin_inserteddate,
+                              cin_updatedby,
+                              cin_updateddate,
+                              cin_refid);
+
+                  UPDATE   ONLINECONCESSIONDETAILSLOG@ticketlink
+                     SET   is_booked = 'S'
+                   WHERE   onlinetransid = i_trancode
+                           AND ONLINECONCESSIONID = cin_itemcode;
+               END LOOP;
+
+               CLOSE book_trx;
+
+
+
+               result := out_transId;
+               COMMIT;
+            ELSE
+               result := 101;
+            END IF;
+         ELSE
+            result := 105;
+         END IF;
+      ELSE
+         result := 104;
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         result := 101;
+         -- Consider logging the error and then re-raise
+         -- RAISE;
+         ROLLBACK;
+   END confirmConcessionTransData;
+
+   PROCEDURE confirmTransactionData (i_trancode   IN     VARCHAR2,
+                                     i_tickamt    IN     VARCHAR2,
+                                     result          OUT NUMBER)
+   AS
+      var_temp              NUMBER;
+      out_unitprice         NUMBER;
+      tranID                NUMBER;
+      out_transId           NUMBER;
+      out_temptransId       NUMBER;
+      out_transBid          NUMBER;
+      out_ticketavailable   NUMBER;
+      cin_onlinetransid     VARCHAR2 (100);
+      cin_onlineticketid    VARCHAR2 (100);
+      cin_onlinecost        VARCHAR2 (100);
+      cin_status            VARCHAR2 (100);
+      cin_insertedby        VARCHAR2 (100);
+      cin_inserteddate      VARCHAR2 (100);
+      cin_seatnum           VARCHAR2 (100);
+
+      cin_tickamt           NUMBER;
+
+
+      CURSOR book_trx
+      IS
+         SELECT   onlinetransid,
+                  onlineticketid,
+                  onlinecost,
+                  status,
+                  insertedby,
+                  inserteddate
+           FROM   ONLINESALEDETAILSLOG@ticketlink
+          WHERE   onlinetransid = i_trancode AND is_booked = 'Y';
+   BEGIN
+      out_temptransId := 0;
+      out_transBid := 0;
+      out_transId := 0;
+      out_ticketavailable := 0;
+      cin_tickamt := 0;
+      var_temp := 1;
+      result := 101;
+
+      --TRANSACTION AMOUNT VERIFICATION
+
+      SELECT   SUM (onlinecost)
+        INTO   cin_tickamt
+        FROM   onlinesaledetailslog@ticketlink
+       WHERE   onlinetransId = i_trancode;
+
+      IF (TO_NUMBER (i_tickamt) <> cin_tickamt)
+      THEN
+         UPDATE   onlinesalemasterlog@ticketlink
+            SET   is_booked = 'N',
+                  updatedby = 'system',
+                  updateddate = SYSDATE,
+                  Remarks = '106:Amount Does Not Matched'
+          WHERE   onlinetransid = i_trancode;
+
+         UPDATE   onlinesaledetailslog@ticketlink
+            SET   is_booked = 'N',
+                  updatedby = 'system',
+                  updateddate = SYSDATE
+          WHERE   onlinetransid = i_trancode;
+
+         result := 106;
+         RETURN;
+      END IF;
+
+
+      SELECT   COUNT (onlinetransId)
+        INTO   out_temptransId
+        FROM   onlinesalemasterlog@ticketlink
+       WHERE   onlinetransId = i_trancode;
+
+      IF (out_temptransId > 0)
+      THEN
+         -- ONLINE SALE BOOKED TICKET RELEASED OR NOT
+         SELECT   COUNT (onlinetransId)
+           INTO   out_transBid
+           FROM   onlinesalemasterlog@ticketlink
+          WHERE   onlinetransId = i_trancode AND is_booked = 'Y';
+
+         --TICKETBOOK TABLE TICKET RELEASED OR NOT FROM AGENT DUE TO 3O MIN BUFFER OR ANY OTHER CASE
+         SELECT   COUNT (a.ticketnumber)
+           INTO   out_ticketavailable
+           FROM   ticketbook@ticketlink a, onlinesaledetailslog@ticketlink b
+          WHERE       a.ticketnumber = b.onlineticketid
+                  AND b.onlinetransId = i_trancode
+                  AND b.is_booked = 'Y'
+                  AND a.status = 'B';
+
+         IF ( (out_transBid > 0) AND (out_ticketavailable > 0))
+         THEN
+            SELECT   MAX (onlinetransId)
+              INTO   out_transId
+              FROM   onlinesalemaster@ticketlink;
+
+            IF (out_transId > 0)
+            THEN
+               out_transId := out_transId + 1;
+
+               INSERT INTO onlinesalemaster@ticketlink (onlinetransid,
+                                                        onlinetrasdate,
+                                                        onlineticketqty,
+                                                        onlineamttendered,
+                                                        status,
+                                                        insertedby,
+                                                        inserteddate,
+                                                        programid,
+                                                        showdate,
+                                                        mobileno)
+                  SELECT   out_transId,
+                           b.onlinetrasdate,
+                           b.onlineticketqty,
+                           b.onlineamttendered,
+                           b.status,
+                           b.insertedby,
+                           b.inserteddate,
+                           b.programid,
+                           b.showdate,
+                           b.mobileno
+                    FROM   onlinesalemasterlog@ticketlink b
+                   WHERE   b.onlinetransid = i_trancode AND is_booked = 'Y';
+
+               UPDATE   onlinesalemasterlog@ticketlink
+                  SET   is_booked = 'S', TRASACTION_ID = out_transId
+                WHERE   onlinetransid = i_trancode;
+
+               OPEN book_trx;
+
+               LOOP
+                  FETCH book_trx
+                     INTO
+                               cin_onlinetransid, cin_onlineticketid, cin_onlinecost, cin_status, cin_insertedby, cin_inserteddate;
+
+                  EXIT WHEN book_trx%NOTFOUND;
+
+
+
+                  INSERT INTO ONLINESALEDETAILS@ticketlink (onlinetransid,
+                                                            onlineticketid,
+                                                            onlinecost,
+                                                            status,
+                                                            insertedby,
+                                                            inserteddate)
+                    VALUES   (out_transId,
+                              cin_onlineticketid,
+                              cin_onlinecost,
+                              cin_status,
+                              cin_insertedby,
+                              cin_inserteddate);
+
+                  UPDATE   ticketbook@ticketlink
+                     SET   Status = 'S'
+                   WHERE   TICKETNUMBER = cin_onlineticketid;
+
+                  UPDATE   ONLINESALEDETAILSLOG@ticketlink
+                     SET   is_booked = 'S'
+                   WHERE   onlinetransid = i_trancode
+                           AND onlineticketid = cin_onlineticketid;
+               END LOOP;
+
+               CLOSE book_trx;
+
+
+
+               result := out_transId;
+            ELSE
+               result := 101;
+            END IF;
+         ELSE
+            result := 105;
+         END IF;
+      ELSE
+         result := 104;
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         result := 101;
+         -- Consider logging the error and then re-raise
+         --  RAISE;
+         ROLLBACK;
+   END confirmTransactionData;
+
+
+
+   PROCEDURE cancelTransaction (i_programid     IN     NUMBER,
+                                i_nooftickets   IN     NUMBER,
+                                i_totalamount   IN     NUMBER,
+                                i_bookingid     IN     NUMBER,
+                                i_agentname     IN     VARCHAR2,
+                                result             OUT NUMBER)
+   AS
+      var_temp             NUMBER;
+      out_unitprice        NUMBER;
+      newRId               NUMBER;
+      tranID               NUMBER;
+      out_transId          NUMBER;
+      out_temptransId      NUMBER;
+      out_transBid         NUMBER;
+      cin_onlinetransid    VARCHAR2 (100);
+      cin_onlineticketid   VARCHAR2 (100);
+      cin_onlinecost       NUMBER;
+      cin_status           VARCHAR2 (100);
+      cin_insertedby       VARCHAR2 (100);
+      cin_inserteddate     VARCHAR2 (100);
+      cin_seatnum          VARCHAR2 (100);
+      cin_onlineqty        NUMBER;
+      cin_progid           NUMBER;
+      cshowid              NUMBER;
+      cshowdate            VARCHAR2 (100);
+      cfitureid            NUMBER;
+      cshowtime            VARCHAR2 (100);
+      cdiffer              NUMBER;
+
+
+
+      /*  CURSOR sold_book_trx IS
+        SELECT  onlinetransid,onlineticketid,onlinecost,status,insertedby,inserteddate
+                from ONLINESALEDETAILSLOG@ticketlink
+                where onlinetransid = i_bookingid
+                and is_booked='S';*/
+
+      CURSOR sold_trx
+      IS
+         SELECT   onlinetransid,
+                  onlineticketid,
+                  onlinecost,
+                  status,
+                  insertedby,
+                  inserteddate
+           FROM   ONLINESALEDETAILS@ticketlink
+          WHERE   onlinetransid = out_transId AND status = 0;
+   BEGIN
+      out_temptransId := 0;
+      out_transBid := 0;
+      out_transId := 0;
+      cin_onlinecost := 0;
+      cin_onlineqty := 0;
+      cin_insertedby := '';
+      cin_progid := 0;
+      cdiffer := 0;
+      var_temp := 1;
+      result := 101;
+      cin_onlineticketid := 0;
+
+
+      SELECT   COUNT (onlinetransId)
+        INTO   out_temptransId
+        FROM   onlinesalemasterlog@ticketlink
+       WHERE       onlinetransId = i_bookingid
+               AND is_booked = 'S'
+               AND PROGRAMID = i_programid;
+
+      IF (out_temptransId > 0)
+      THEN
+         SELECT   ONLINEAMTTENDERED,
+                  ONLINETICKETQTY,
+                  INSERTEDBY,
+                  PROGRAMID,
+                  TRASACTION_ID
+           INTO   cin_onlinecost,
+                  cin_onlineqty,
+                  cin_insertedby,
+                  cin_progid,
+                  out_transId
+           FROM   onlinesalemasterlog@ticketlink
+          WHERE   onlinetransId = i_bookingid AND is_booked = 'S';
+
+         IF (TRIM (i_agentname) = TRIM (cin_insertedby))
+         THEN
+            SELECT   p.SHOWTIMEID,
+                     TO_CHAR (p.SHOWDATE, 'dd-mm-yyyy') AS showdate,
+                     P.FEATUREID,
+                     TO_CHAR (S.SHOWTIME, 'hh24:mi:ss') AS showtime,
+                     24
+                     * (TO_DATE (
+                           (   TO_CHAR (p.SHOWDATE, 'MM/DD/YYYY')
+                            || ' '
+                            || TO_CHAR (S.SHOWTIME, 'hh24:mi:ss')),
+                           'MM/DD/YYYY hh24:mi:ss'
+                        )
+                        - TO_DATE (
+                             TO_CHAR (SYSDATE, 'MM/DD/YYYY hh24:mi:ss'),
+                             'MM/DD/YYYY hh24:mi:ss'
+                          ))
+                        AS diff_hours
+              INTO   cshowid,
+                     cshowdate,
+                     cfitureid,
+                     cshowtime,
+                     cdiffer
+              FROM   programedfilm@ticketlink p, showtime@ticketlink s
+             WHERE       P.SHOWTIMEID = S.SHOWTIMEID
+                     AND P.BOXOFFICEID = S.BOXOFFICEID
+                     AND P.PROGRAMID = cin_progid
+                     AND P.ISPROSPONED = 'N'
+                     AND P.ISONLINE = 'Y'
+                     AND P.STATUS = 'N';
+
+            IF (cdiffer >= 4)
+            THEN
+               UPDATE   onlinesalemaster@ticketlink
+                  SET   status = 2,
+                        UPDATEDBY = i_agentname,
+                        UPDATEDDATE = SYSDATE
+                WHERE   ONLINETRANSID = out_transId AND status = 0;
+
+               OPEN sold_trx;
+
+               LOOP
+                  FETCH sold_trx
+                     INTO
+                               cin_onlinetransid, cin_onlineticketid, cin_onlinecost, cin_status, cin_insertedby, cin_inserteddate;
+
+                  EXIT WHEN sold_trx%NOTFOUND;
+
+                  UPDATE   ONLINESALEDETAILS@ticketlink
+                     SET   status = 2,
+                           UPDATEDBY = i_agentname,
+                           UPDATEDDATE = SYSDATE
+                   WHERE       ONLINETRANSID = out_transId
+                           AND status = 0
+                           AND ONLINETICKETID = cin_onlineticketid;
+
+                  UPDATE   ticketbook@ticketlink
+                     SET   Status = 'B'
+                   WHERE   TICKETNUMBER = cin_onlineticketid;
+               --update ONLINESALEDETAILSLOG@ticketlink set is_booked='N' WHERE onlinetransid = i_trancode and onlineticketid=cin_onlineticketid;
+
+
+
+               END LOOP;
+
+               CLOSE sold_trx;
+
+               --BELOW COMMAND COMMENTED DUE TO ERROR OF CANCELEDBY AND CANCELEDDATE. BY AMIT
+               --update onlinesalemasterlog@ticketlink set is_booked = 'C',status =2,CANCELEDBY=i_agentname,CANCELEDDATE=SYSDATE where ONLINETRANSID = i_bookingid and  is_booked='S' ;
+               UPDATE   onlinesalemasterlog@ticketlink
+                  SET   is_booked = 'C', status = 2
+                WHERE   ONLINETRANSID = i_bookingid AND is_booked = 'S';
+
+               UPDATE   ONLINESALEDETAILSLOG@ticketlink
+                  SET   is_booked = 'C'
+                WHERE   onlinetransid = i_bookingid AND is_booked = 'S';
+
+               result := 100;                             -- successful cancel
+            ELSE
+               result := 109;                      -- not available for cancel
+            END IF;
+         ELSE
+            result := 105;                         --invalid marchange request
+         END IF;
+      ELSE
+         result := 104;                                       --invalid tranID
+      END IF;
+   EXCEPTION
+      WHEN OTHERS
+      THEN
+         result := 101;
+         -- Consider logging the error and then re-raise
+         --  RAISE;
+         ROLLBACK;
+   END cancelTransaction;
+END PKG_TICKE_PURCHAGE; 

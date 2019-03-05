@@ -1,3 +1,6 @@
+EXTRA
+INSERT INTO actscheduless (id, ActId,title, attachment,status) SELECT `id`,`ActId`,`title`,concat('act/',ActId,'___Schedule.pdf'),`status` FROM actschedule
+
 Iport database with command prompt:
  mysql -u root -p
  use bd_name
